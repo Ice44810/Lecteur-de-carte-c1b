@@ -1,5 +1,10 @@
 """Enumerations du domaine tachygraphique.
 
+Ces enumerations decrivent le **domaine**, pas le stockage : elles vivent donc
+dans ``app.core`` et peuvent etre utilisees indifferemment par le parser (donnee
+decodee), les modeles ORM (donnee metier), le moteur d'analyse et l'interface,
+sans qu'aucune de ces couches ne depende d'une autre.
+
 Les valeurs stockees en base sont les noms techniques en majuscules (stables,
 utilisables par une future API REST). Les libelles francais destines a
 l'interface sont fournis par la propriete ``label`` de chaque enumeration :

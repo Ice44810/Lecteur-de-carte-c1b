@@ -9,7 +9,7 @@ from sqlalchemy import CheckConstraint, Enum as SAEnum, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.models.base import Base
-from app.database.models.enums import ActivityType
+from app.core.enums import ActivityType
 from app.database.models.types import UTCDateTime
 
 if TYPE_CHECKING:  # pragma: no cover - imports de typage uniquement

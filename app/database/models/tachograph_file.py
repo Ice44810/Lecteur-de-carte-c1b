@@ -9,7 +9,7 @@ from sqlalchemy import BigInteger, CheckConstraint, Enum as SAEnum, ForeignKey, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.models.base import Base
-from app.database.models.enums import FileType, ParsingStatus
+from app.core.enums import FileType, ParsingStatus
 from app.database.models.types import UTCDateTime
 
 if TYPE_CHECKING:  # pragma: no cover - imports de typage uniquement

@@ -9,7 +9,7 @@ from app.database.models.activity import Activity
 from app.database.models.analysis import Analysis
 from app.database.models.base import Base, TimestampMixin
 from app.database.models.driver import Driver
-from app.database.models.enums import (
+from app.core.enums import (
     ActivityType,
     FileType,
     ParsingStatus,
