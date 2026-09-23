@@ -144,9 +144,7 @@ class MigrationRunner:
 
         applied: list[Migration] = []
         for migration in pending:
-            logger.info(
-                "Application de la migration %04d - %s", migration.version, migration.name
-            )
+            logger.info("Application de la migration %04d - %s", migration.version, migration.name)
             try:
                 with self._engine.begin() as connection:
                     migration.upgrade(connection)

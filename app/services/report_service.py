@@ -51,9 +51,7 @@ class ReportFormat(StrEnum):
     @property
     def label(self) -> str:
         """Libelle affichable."""
-        return {ReportFormat.PDF: "PDF", ReportFormat.EXCEL: "Excel", ReportFormat.CSV: "CSV"}[
-            self
-        ]
+        return {ReportFormat.PDF: "PDF", ReportFormat.EXCEL: "Excel", ReportFormat.CSV: "CSV"}[self]
 
     @property
     def extension(self) -> str:
@@ -120,9 +118,7 @@ class ReportService(BaseService):
         if request.output_path is not None:
             return request.output_path
         scope = "entreprise" if request.is_company_report else f"conducteur-{request.driver_ids[0]}"
-        stamp = (
-            f"{request.period_start.strftime('%Y%m%d')}-{request.period_end.strftime('%Y%m%d')}"
-        )
+        stamp = f"{request.period_start.strftime('%Y%m%d')}-{request.period_end.strftime('%Y%m%d')}"
         return self.export_directory / f"rapport-{scope}-{stamp}{request.report_format.extension}"
 
     def generate(self, request: ReportRequest) -> Path:

@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
 )
 
 from app.card_reader import CardDetector, TachographCard, create_reader, pcsc_diagnostics
-from app.card_reader.interface import CardStatus
 from app.parser.specification import questions_for
 from app.ui.common.errors import show_error
 from app.ui.common.page import Page
@@ -148,9 +147,7 @@ class CardReaderPage(Page):
             "confirmee a partir de la specification officielle (points listes ci-dessous). "
             "Le diagnostic du lecteur, lui, est operationnel."
             if available
-            else (
-                f"{cause} {action}"
-            )
+            else (f"{cause} {action}")
         )
 
         for event in events:

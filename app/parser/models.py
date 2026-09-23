@@ -127,9 +127,7 @@ class DecodedDriverIdentification(BaseModel):
             and self.card_expiry_date is not None
             and self.card_expiry_date < self.card_issue_date
         ):
-            raise ValueError(
-                "la date d'expiration de la carte precede sa date de delivrance"
-            )
+            raise ValueError("la date d'expiration de la carte precede sa date de delivrance")
         return self
 
 
@@ -231,8 +229,7 @@ class ParseResult(BaseModel):
     is_complete: bool = Field(
         default=False,
         description=(
-            "Vrai uniquement si toutes les structures du fichier ont ete "
-            "reconnues et decodees."
+            "Vrai uniquement si toutes les structures du fichier ont ete reconnues et decodees."
         ),
     )
 

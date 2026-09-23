@@ -72,9 +72,7 @@ class ImportRepository(BaseRepository[TachographFile]):
             statement = statement.where(
                 TachographFile.filename.ilike(pattern) | TachographFile.sha256.ilike(pattern)
             )
-        statement = statement.order_by(
-            TachographFile.imported_at.desc(), TachographFile.id.desc()
-        )
+        statement = statement.order_by(TachographFile.imported_at.desc(), TachographFile.id.desc())
         if limit is not None:
             statement = statement.limit(limit)
         return list(self._session.scalars(statement).all())

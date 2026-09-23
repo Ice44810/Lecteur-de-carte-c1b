@@ -125,7 +125,9 @@ class APDUCommand:
         """
         suffix = f" Lc={len(self.data)}" if self.data else ""
         expected = f" Le={self.expected_length}" if self.expected_length is not None else ""
-        return f"CLA={self.cla:02X} INS={self.ins:02X} P1={self.p1:02X} P2={self.p2:02X}{suffix}{expected}"
+        entete = f"CLA={self.cla:02X} INS={self.ins:02X}"
+        parametres = f"P1={self.p1:02X} P2={self.p2:02X}"
+        return f"{entete} {parametres}{suffix}{expected}"
 
 
 @dataclass(frozen=True, slots=True)

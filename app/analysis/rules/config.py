@@ -92,8 +92,7 @@ class RuleSet(BaseModel):
         for key, parameter in value.items():
             if key.upper() != parameter.code:
                 raise ValueError(
-                    f"la cle '{key}' ne correspond pas au code du parametre "
-                    f"'{parameter.code}'"
+                    f"la cle '{key}' ne correspond pas au code du parametre '{parameter.code}'"
                 )
         return {key.upper(): parameter for key, parameter in value.items()}
 

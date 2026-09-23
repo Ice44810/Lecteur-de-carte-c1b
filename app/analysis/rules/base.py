@@ -176,8 +176,7 @@ class Rule(ABC):
             raise RuleConfigurationError(
                 "Une regle doit citer sa source reglementaire.",
                 cause=(
-                    f"La classe {cls.__name__} ne definit pas d'attribut "
-                    "'regulation_reference'."
+                    f"La classe {cls.__name__} ne definit pas d'attribut 'regulation_reference'."
                 ),
                 action=(
                     "Renseignez la reference precise (texte, article) du seuil applique. "

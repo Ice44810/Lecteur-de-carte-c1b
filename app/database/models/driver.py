@@ -45,8 +45,12 @@ class Driver(TimestampMixin, Base):
     card_issuing_country: Mapped[str | None] = mapped_column(
         String(3), doc="Code pays emetteur de la carte (alpha-2 ou alpha-3), si decode."
     )
-    card_issue_date: Mapped[date | None] = mapped_column(Date, doc="Date de delivrance de la carte.")
-    card_expiry_date: Mapped[date | None] = mapped_column(Date, doc="Date d'expiration de la carte.")
+    card_issue_date: Mapped[date | None] = mapped_column(
+        Date, doc="Date de delivrance de la carte."
+    )
+    card_expiry_date: Mapped[date | None] = mapped_column(
+        Date, doc="Date d'expiration de la carte."
+    )
 
     notes: Mapped[str | None] = mapped_column(String(500), doc="Commentaire libre de l'exploitant.")
 

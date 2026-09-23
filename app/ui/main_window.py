@@ -57,9 +57,7 @@ class MainWindow(QMainWindow):
         self._items: dict[str, NavigationItem] = {}
         self._buttons: dict[str, QPushButton] = {}
 
-        self.setWindowTitle(
-            f"{context.settings.app_name} - gestion et analyse tachygraphique"
-        )
+        self.setWindowTitle(f"{context.settings.app_name} - gestion et analyse tachygraphique")
         self.setMinimumSize(*WINDOW_MINIMUM_SIZE)
         self.setStyleSheet(STYLESHEET)
 

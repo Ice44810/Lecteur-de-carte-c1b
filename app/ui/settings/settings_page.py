@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
 )
 
 from app.analysis.rules import RULESET_FILENAME, load_ruleset
-from app.bootstrap import ApplicationContext
 from app.ui.common.page import Page
 from app.ui.common.widgets import NoticeBanner, ReadOnlyTable
 
@@ -159,9 +158,7 @@ class SettingsPage(Page):
         """Affiche les dernieres lignes du journal."""
         log_path = self.context.settings.log_path
         if not log_path.is_file():
-            self._log_view.setPlainText(
-                f"Aucun journal disponible pour l'instant ({log_path})."
-            )
+            self._log_view.setPlainText(f"Aucun journal disponible pour l'instant ({log_path}).")
             return
         try:
             lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()

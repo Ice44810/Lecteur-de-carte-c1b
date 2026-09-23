@@ -122,8 +122,7 @@ class MockCardReader(CardReaderInterface):
         if not self._available:
             raise PCSCUnavailableError()
         return tuple(
-            ReaderInfo(name=name, index=index)
-            for index, name in enumerate(self._reader_names)
+            ReaderInfo(name=name, index=index) for index, name in enumerate(self._reader_names)
         )
 
     def poll(self) -> CardPresence:
@@ -159,9 +158,7 @@ class MockCardReader(CardReaderInterface):
         self._connected = True
         selected = reader or readers[0]
         logger.info("Connexion simulee etablie avec %s", selected.display_name)
-        return CardPresence(
-            status=CardStatus.CARD_CONNECTED, reader=selected, atr=self._atr
-        )
+        return CardPresence(status=CardStatus.CARD_CONNECTED, reader=selected, atr=self._atr)
 
     def transmit(self, command: APDUCommand) -> APDUResponse:
         """Retourne la reponse simulee associee a une commande.

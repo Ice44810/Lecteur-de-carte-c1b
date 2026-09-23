@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -19,7 +20,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import QDate
 
 from app.bootstrap import ApplicationContext
 from app.core.enums import ActivityType

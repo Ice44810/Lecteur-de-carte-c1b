@@ -70,6 +70,7 @@ class TachyError(Exception):
         return self.message, self.cause, self.action
 
     def __str__(self) -> str:  # pragma: no cover - representation triviale
+        """Retourne le message destine a l'utilisateur, sans detail technique."""
         return self.message
 
 
@@ -154,9 +155,7 @@ class DuplicateFileError(ImportError_):
         existing_file_id: int | None = None,
         sha256: str | None = None,
     ) -> None:
-        super().__init__(
-            message, cause=cause, action=action, technical_detail=technical_detail
-        )
+        super().__init__(message, cause=cause, action=action, technical_detail=technical_detail)
         self.existing_file_id = existing_file_id
         self.sha256 = sha256
 
@@ -252,7 +251,9 @@ class NoReaderFoundError(CardReaderError):
 
     default_message = "Aucun lecteur de carte detecte."
     default_cause = "Aucun lecteur PC/SC n'est connecte ou reconnu par le systeme."
-    default_action = "Branchez le lecteur USB puis verifiez sa detection avec la commande pcsc_scan."
+    default_action = (
+        "Branchez le lecteur USB puis verifiez sa detection avec la commande pcsc_scan."
+    )
 
 
 class NoCardPresentError(CardReaderError):

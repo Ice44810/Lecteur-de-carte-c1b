@@ -70,7 +70,23 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ANN", "D"]
-ignore = ["D203", "D213", "ANN101", "ANN102"]
+# D401 verifie le mode imperatif sur des heuristiques anglaises : les docstrings du
+# projet sont en francais. D107 est couvert autrement : les arguments de __init__ sont
+# documentes dans la docstring de la classe, conformement au style Google.
+ignore = ["D203", "D213", "D401", "D107"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D", "ANN"]
+# Les declarations Protocol n'ont pas de corps a documenter : la docstring de la
+# classe decrit le contrat.
+"app/database/repositories/interfaces.py" = ["D102"]
+# Frontieres avec des bibliotheques non typees (SQLAlchemy, pyscard) : le type reel
+# n'est pas connaissable statiquement a cet endroit precis.
+"app/card_reader/pcsc_reader.py" = ["ANN401"]
+"app/database/database.py" = ["ANN401"]
+"app/database/models/types.py" = ["ANN401"]
+"app/database/repositories/base.py" = ["ANN401"]
+"app/analysis/rules/base.py" = ["ANN401"]

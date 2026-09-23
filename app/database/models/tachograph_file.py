@@ -5,11 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, CheckConstraint, Enum as SAEnum, ForeignKey, String, func
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, String, func
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database.models.base import Base
 from app.core.enums import FileType, ParsingStatus
+from app.database.models.base import Base
 from app.database.models.types import UTCDateTime
 
 if TYPE_CHECKING:  # pragma: no cover - imports de typage uniquement

@@ -81,9 +81,7 @@ def calculate_working_time(
     if period_start is not None and period_end is not None:
         selected = clip_to_period(selected, period_start, period_end)
     return sum(
-        interval.duration_seconds
-        for interval in selected
-        if interval.activity_type in wanted
+        interval.duration_seconds for interval in selected if interval.activity_type in wanted
     )
 
 
@@ -114,9 +112,7 @@ def calculate_daily_working_time(
     return result
 
 
-def calculate_daily_amplitude(
-    intervals: Sequence[ActivityInterval], day: date
-) -> int | None:
+def calculate_daily_amplitude(intervals: Sequence[ActivityInterval], day: date) -> int | None:
     """Retourne l'amplitude de service d'une journee, en secondes.
 
     L'amplitude est mesuree entre le debut de la premiere activite de service et la

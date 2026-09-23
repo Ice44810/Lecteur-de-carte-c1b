@@ -29,8 +29,7 @@ class DriversPage(Page):
 
     title = "Conducteurs"
     subtitle = (
-        "Referentiel des conducteurs. Le numero de carte identifie le conducteur "
-        "de maniere unique."
+        "Referentiel des conducteurs. Le numero de carte identifie le conducteur de maniere unique."
     )
 
     def __init__(self, context: ApplicationContext, parent: QWidget | None = None) -> None:

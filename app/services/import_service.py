@@ -32,7 +32,7 @@ from pathlib import Path
 
 from app.config.logging_config import get_logger
 from app.core.enums import FileType, ParsingStatus
-from app.core.exceptions import StorageError, UnsupportedFileTypeError
+from app.core.exceptions import StorageError
 from app.core.hashing import sha256_file
 from app.database.models import TachographFile
 from app.database.repositories import ImportRepository
@@ -82,10 +82,7 @@ class FileInspection:
             return None
         if self.existing_imported_at is None:  # pragma: no cover - incoherence de donnees
             return "Ce fichier a deja ete importe."
-        return (
-            "Ce fichier a deja ete importe le "
-            f"{self.existing_imported_at.strftime('%d/%m/%Y')}."
-        )
+        return f"Ce fichier a deja ete importe le {self.existing_imported_at.strftime('%d/%m/%Y')}."
 
     @property
     def human_size(self) -> str:
@@ -195,9 +192,7 @@ class ImportService(BaseService):
             existing_date = existing.imported_at if existing is not None else None
 
         if existing_id is not None:
-            logger.info(
-                "Fichier %s deja importe (import #%s)", file_path.name, existing_id
-            )
+            logger.info("Fichier %s deja importe (import #%s)", file_path.name, existing_id)
 
         from app.parser import get_parser_for
 
@@ -309,7 +304,5 @@ class ImportService(BaseService):
             parsing_error=item.parsing_error,
             original_path=item.original_path,
             driver_display_name=item.driver.display_name if item.driver is not None else None,
-            vehicle_registration=(
-                item.vehicle.registration if item.vehicle is not None else None
-            ),
+            vehicle_registration=(item.vehicle.registration if item.vehicle is not None else None),
         )

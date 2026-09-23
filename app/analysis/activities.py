@@ -14,10 +14,10 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from datetime import date, datetime, timedelta
 
+from app.analysis.models import ActivityInterval, DaySummary, PeriodTotals
 from app.core.enums import ActivityType
 from app.core.exceptions import AnalysisError
 from app.core.timeutils import day_bounds, ensure_utc
-from app.analysis.models import ActivityInterval, DaySummary, PeriodTotals
 
 __all__ = [
     "to_intervals",

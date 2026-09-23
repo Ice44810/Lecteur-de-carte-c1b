@@ -108,9 +108,7 @@ class AnomaliesPage(Page):
                 f"(jeu de regles {self._ruleset.version})."
             )
 
-        self.notify(
-            f"{len(rows)} situation(s) enregistree(s) - {active} regle(s) active(s)"
-        )
+        self.notify(f"{len(rows)} situation(s) enregistree(s) - {active} regle(s) active(s)")
 
     @staticmethod
     def _format_value(value: float | None, unit: str) -> str:

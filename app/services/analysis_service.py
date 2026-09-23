@@ -261,9 +261,7 @@ class AnalysisService(BaseService):
         Returns:
             La synthese de la periode.
         """
-        intervals = self.load_intervals(
-            driver_id, period_start=period_start, period_end=period_end
-        )
+        intervals = self.load_intervals(driver_id, period_start=period_start, period_end=period_end)
         totals = PeriodTotals.from_intervals(intervals)
         evaluation = evaluate_rules(
             RuleContext(

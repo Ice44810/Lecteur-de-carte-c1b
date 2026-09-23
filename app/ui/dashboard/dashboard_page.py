@@ -43,9 +43,7 @@ class DashboardPage(Page):
         self._driving_card = IndicatorCard("Conduite (semaine)")
         self._rest_card = IndicatorCard("Repos (semaine)")
 
-        for column, card in enumerate(
-            (self._drivers_card, self._files_card, self._alerts_card)
-        ):
+        for column, card in enumerate((self._drivers_card, self._files_card, self._alerts_card)):
             indicators.addWidget(card, 0, column)
         for column, card in enumerate(
             (self._last_download_card, self._driving_card, self._rest_card)

@@ -5,10 +5,6 @@ Importer ce paquet suffit a enregistrer toutes les tables dans
 migration.
 """
 
-from app.database.models.activity import Activity
-from app.database.models.analysis import Analysis
-from app.database.models.base import Base, TimestampMixin
-from app.database.models.driver import Driver
 from app.core.enums import (
     ActivityType,
     FileType,
@@ -16,6 +12,10 @@ from app.core.enums import (
     RuleStatus,
     Severity,
 )
+from app.database.models.activity import Activity
+from app.database.models.analysis import Analysis
+from app.database.models.base import Base, TimestampMixin
+from app.database.models.driver import Driver
 from app.database.models.infringement import Infringement
 from app.database.models.tachograph_file import TachographFile
 from app.database.models.types import UTCDateTime

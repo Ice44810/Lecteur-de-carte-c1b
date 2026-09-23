@@ -124,7 +124,9 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "(numero de carte, nom, prenom, date de naissance, pays emetteur, dates de "
             "validite), y compris la page de codes utilisee pour les caracteres."
         ),
-        reference="Annexe I C, appendice 1 (types CardIdentification, DriverCardHolderIdentification)",
+        reference=(
+            "Annexe I C, appendice 1 (types CardIdentification, DriverCardHolderIdentification)"
+        ),
     ),
     OpenQuestion(
         topic="c1b",
@@ -180,7 +182,10 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "Position et codage de l'immatriculation, du pays d'immatriculation, du VIN et "
             "de l'identifiant de l'unite embarquee."
         ),
-        reference="Annexe I C, appendice 1 (types VehicleIdentificationNumber, VehicleRegistrationIdentification)",
+        reference=(
+            "Annexe I C, appendice 1 (types VehicleIdentificationNumber, "
+            "VehicleRegistrationIdentification)"
+        ),
     ),
     OpenQuestion(
         topic="v1b",

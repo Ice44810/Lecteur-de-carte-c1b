@@ -286,9 +286,7 @@ class TachographFileParser(ABC):
         )
         return result
 
-    def _attempt(
-        self, section: str, extractor: object
-    ) -> tuple[object, list[ParseDiagnostic]]:
+    def _attempt(self, section: str, extractor: object) -> tuple[object, list[ParseDiagnostic]]:
         """Execute une extraction en capturant les incertitudes et les erreurs.
 
         Args:

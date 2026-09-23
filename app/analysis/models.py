@@ -43,9 +43,7 @@ class ActivityInterval:
         object.__setattr__(self, "start", ensure_utc(self.start))
         object.__setattr__(self, "end", ensure_utc(self.end))
         if self.end < self.start:
-            raise ValueError(
-                "la fin d'un intervalle d'activite ne peut pas preceder son debut"
-            )
+            raise ValueError("la fin d'un intervalle d'activite ne peut pas preceder son debut")
 
     @property
     def duration_seconds(self) -> int:

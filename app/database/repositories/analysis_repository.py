@@ -53,8 +53,6 @@ class AnalysisRepository(BaseRepository[Analysis]):
     def list_recent(self, *, limit: int = 20) -> list[Analysis]:
         """Retourne les dernieres analyses calculees, tous conducteurs confondus."""
         statement = (
-            select(Analysis)
-            .order_by(Analysis.created_at.desc(), Analysis.id.desc())
-            .limit(limit)
+            select(Analysis).order_by(Analysis.created_at.desc(), Analysis.id.desc()).limit(limit)
         )
         return list(self._session.scalars(statement).all())

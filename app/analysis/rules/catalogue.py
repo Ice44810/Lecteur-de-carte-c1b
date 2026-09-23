@@ -32,7 +32,8 @@ REGULATION_SOURCES: tuple[str, ...] = (
     "Reglement (CE) no 561/2006 du 15 mars 2006 - temps de conduite, pauses et repos",
     "Reglement (UE) 2020/1054 du 15 juillet 2020 - modification du reglement 561/2006",
     "Directive 2002/15/CE du 11 mars 2002 - temps de travail des personnels mobiles",
-    "Reglement (UE) no 165/2014 du 4 fevrier 2014 - appareils de controle dans le transport routier",
+    "Reglement (UE) no 165/2014 du 4 fevrier 2014 - appareils de controle dans le"
+    " transport routier",
     "Accord AETR - trajets effectues hors Union europeenne",
 )
 """Textes de reference a consulter avant activation d'une regle."""
@@ -86,8 +87,7 @@ RULE_CATALOGUE: tuple[PlannedRule, ...] = (
         code="TWO_WEEK_DRIVING_MAX",
         title="Duree de conduite sur deux semaines consecutives",
         description=(
-            "Comparer le cumul de conduite de deux semaines consecutives au maximum "
-            "autorise."
+            "Comparer le cumul de conduite de deux semaines consecutives au maximum autorise."
         ),
         reference_to_verify="Reglement (CE) no 561/2006, article 6, paragraphe 3",
         parameter_codes=("TWO_WEEK_DRIVING_MAX_SECONDS",),

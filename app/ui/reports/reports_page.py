@@ -125,11 +125,21 @@ class ReportsPage(Page):
         return ReportRequest(
             report_format=self._format.currentData(),
             period_start=reference.replace(
-                year=start.year, month=start.month, day=start.day, hour=0, minute=0, second=0,
+                year=start.year,
+                month=start.month,
+                day=start.day,
+                hour=0,
+                minute=0,
+                second=0,
                 microsecond=0,
             ),
             period_end=reference.replace(
-                year=end.year, month=end.month, day=end.day, hour=0, minute=0, second=0,
+                year=end.year,
+                month=end.month,
+                day=end.day,
+                hour=0,
+                minute=0,
+                second=0,
                 microsecond=0,
             )
             + timedelta(days=1),

@@ -161,9 +161,7 @@ class ActivityRepository(BaseRepository[Activity]):
             statement = statement.where(Activity.driver_id == driver_id)
         return self._session.scalar(statement)
 
-    def count_drivers_with_activity(
-        self, *, period_start: datetime, period_end: datetime
-    ) -> int:
+    def count_drivers_with_activity(self, *, period_start: datetime, period_end: datetime) -> int:
         """Retourne le nombre de conducteurs ayant une activite sur la periode."""
         statement = select(func.count(func.distinct(Activity.driver_id))).where(
             Activity.end_datetime > period_start,

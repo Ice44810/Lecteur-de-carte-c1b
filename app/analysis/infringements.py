@@ -113,10 +113,7 @@ class RuleEvaluation:
         total = len(self.reportable)
         if total == 0:
             if self.rules_evaluated == 0:
-                return (
-                    "Aucun controle reglementaire effectue : aucune regle verifiee "
-                    "n'est active."
-                )
+                return "Aucun controle reglementaire effectue : aucune regle verifiee n'est active."
             return "Aucune situation a verifier sur la periode analysee."
         if total == 1:
             return "1 situation necessite une verification"

@@ -93,9 +93,7 @@ class VehiclesPage(Page):
         """Cree une fiche vehicule depuis le formulaire."""
         registration = self._registration.text().strip()
         if not registration:
-            show_information(
-                self, "L'immatriculation est obligatoire.", title="Champ manquant"
-            )
+            show_information(self, "L'immatriculation est obligatoire.", title="Champ manquant")
             return
         try:
             summary = self._service.create(
