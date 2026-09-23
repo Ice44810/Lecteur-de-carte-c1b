@@ -31,15 +31,38 @@ sudo apt install \
     libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 libglib2.0-0
 ```
 
+Ces paquets suffisent au mode `--check` et à l'exécution des tests. L'affichage
+sur un serveur X en exige davantage, car le greffon `xcb` de Qt s'appuie sur
+plusieurs bibliothèques XCB :
+
+```bash
+sudo apt install \
+    libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+    libxcb-keysyms1 libxcb-render-util0 libxcb-xkb1
+```
+
 Équivalent Fedora :
 
 ```bash
 sudo dnf install mesa-libEGL mesa-libGL libxkbcommon dbus-libs fontconfig glib2
+sudo dnf install \
+    libxkbcommon-x11 xcb-util-cursor xcb-util-wm xcb-util-image \
+    xcb-util-keysyms xcb-util-renderutil libxcb
 ```
 
 Symptôme d'une bibliothèque manquante : au démarrage, Qt signale
-`could not load the Qt platform plugin "xcb"`. Le message indique la
-bibliothèque absente, à installer telle quelle.
+`Could not load the Qt platform plugin "xcb" in "" even though it was found`,
+suivi d'un abandon du processus. Le nom du greffon est indiqué mais pas celui de
+la bibliothèque absente ; pour l'identifier :
+
+```bash
+ldd "$(python -c 'import PySide6, os; print(os.path.dirname(PySide6.__file__))')"/Qt/plugins/platforms/libqxcb.so \
+    | grep 'not found'
+```
+
+Chaque ligne affichée correspond à un paquet à installer. L'affichage détaillé du
+chargement des greffons (`QT_DEBUG_PLUGINS=1 python -m app.main`) complète le
+diagnostic si nécessaire.
 
 ### PC/SC (lecteur de carte, optionnel)
 
