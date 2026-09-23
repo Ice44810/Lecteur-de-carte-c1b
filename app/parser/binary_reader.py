@@ -34,12 +34,16 @@ class BinaryReaderError(ParsingError):
     """Erreur de lecture binaire, avec position dans le flux.
 
     Args:
-        message: Description du probleme.
+        message: Description du probleme. Omis, le message par defaut de la classe
+            est utilise, ce qui permet aux sous-classes de porter leur propre
+            formulation (message, cause et action).
         position: Position du curseur au moment de l'erreur.
         **kwargs: Arguments transmis a :class:`~app.core.exceptions.ParsingError`.
     """
 
-    def __init__(self, message: str, *, position: int | None = None, **kwargs: object) -> None:
+    def __init__(
+        self, message: str | None = None, *, position: int | None = None, **kwargs: object
+    ) -> None:
         detail = kwargs.pop("technical_detail", None)
         super().__init__(
             message,
