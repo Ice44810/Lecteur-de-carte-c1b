@@ -53,7 +53,7 @@ est écarté plutôt que rattaché à une date choisie par défaut.
 
 ## 3. Où vivent les seuils
 
-Dans `rules.json`, sous la racine des données (voir `TACHY_DATA_DIR`). Le fichier
+Dans `rules.json`, sous la racine des données (voir `TACHOLIBRE_DATA_DIR`). Le fichier
 est lu **au démarrage** et appliqué par toutes les analyses de la session : une
 modification est prise en compte au lancement suivant. Un fichier illisible ou
 invalide n'empêche pas le démarrage : aucun seuil n'est alors appliqué, et l'erreur

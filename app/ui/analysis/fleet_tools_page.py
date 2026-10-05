@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import __version__
+from app import APP_NAME, __version__
 from app.bootstrap import ApplicationContext
 from app.reports.excel import write_excel
 from app.reports.model import ReportTable
@@ -274,7 +274,7 @@ class FleetToolsPage(Page):
         header = ", ".join(
             part
             for part in (
-                f"tachy-linux {__version__}",
+                f"{APP_NAME} {__version__}",
                 f"flotte {company}".strip(),
                 f"{self._start.date().toString('dd/MM/yyyy')} - "
                 f"{self._end.date().toString('dd/MM/yyyy')}",

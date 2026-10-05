@@ -3,18 +3,22 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tachy-linux"
+name = "tacholibre"
 version = "0.1.0"
-description = "Application desktop Linux de lecture, archivage et analyse de donnees tachygraphiques (C1B / V1B)"
+description = "TachoLibre : lecture, archivage et analyse de donnees tachygraphiques (C1B / V1B) pour Windows, macOS et Linux"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "tachy-linux contributors" }]
+authors = [{ name = "TachoLibre contributors" }]
 keywords = ["tachograph", "tachygraphe", "c1b", "v1b", "pcsc", "transport"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
+    "Environment :: MacOS X",
+    "Environment :: Win32 (MS Windows)",
     "Environment :: X11 Applications :: Qt",
     "Intended Audience :: Other Audience",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -28,12 +32,16 @@ dependencies = [
     "pydantic-settings>=2.2",
     "openpyxl>=3.1",
     "reportlab>=4.0",
+    # Windows ne fournit pas la base des fuseaux horaires utilisee par zoneinfo.
+    "tzdata; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
-# PC/SC support requires the system packages pcscd and libpcsclite-dev.
-# See docs/INSTALL_LINUX.md before installing this extra.
+# Lecteur de carte. Windows et macOS : installation directe. Linux : installer
+# d'abord pcscd et libpcsclite-dev (voir docs/INSTALLATION.md).
 pcsc = ["pyscard>=2.0"]
+# Construction d'un executable autonome (voir packaging/).
+package = ["pyinstaller>=6.0"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -42,7 +50,10 @@ dev = [
 ]
 
 [project.scripts]
-tachy-linux = "app.main:main"
+tacholibre = "app.main:main"
+
+[project.gui-scripts]
+tacholibre-gui = "app.main:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

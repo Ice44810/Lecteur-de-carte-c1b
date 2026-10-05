@@ -1,1 +1,1 @@
-"""Suite de tests de tachy-linux."""
+"""Suite de tests de TachoLibre."""

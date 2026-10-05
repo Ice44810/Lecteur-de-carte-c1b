@@ -14,6 +14,8 @@ disponible pour les journaux et le developpeur.
 
 from __future__ import annotations
 
+from app.core.platform_help import pcsc_service_action, pcsc_service_cause
+
 __all__ = [
     "TachyError",
     "ConfigurationError",
@@ -232,18 +234,15 @@ class CardReaderError(TachyError):
 
     default_message = "Impossible de communiquer avec le lecteur de carte."
     default_cause = "Le lecteur ou le service PC/SC n'est pas disponible."
-    default_action = "Verifiez le branchement du lecteur et l'etat du service pcscd."
+    default_action = "Verifiez le branchement du lecteur et l'etat du service PC/SC."
 
 
 class PCSCUnavailableError(CardReaderError):
-    """La pile PC/SC est absente ou le service pcscd est arrete."""
+    """La pile PC/SC est absente ou son service est arrete."""
 
     default_message = "Le service PC/SC n'est pas disponible."
-    default_cause = "Le paquet pcscd n'est pas installe ou le service est arrete."
-    default_action = (
-        "Installez puis demarrez le service : "
-        "sudo apt install pcscd pcsc-tools && sudo systemctl start pcscd"
-    )
+    default_cause = pcsc_service_cause()
+    default_action = pcsc_service_action()
 
 
 class NoReaderFoundError(CardReaderError):

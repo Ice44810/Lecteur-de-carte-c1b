@@ -1,16 +1,14 @@
-# Runtime dependencies - tachy-linux
+# Runtime dependencies - TachoLibre (Windows, macOS, Linux)
 #
-# Installation (Ubuntu / Debian):
-#   python3 -m venv .venv
-#   source .venv/bin/activate
+# Installation: see docs/INSTALLATION.md
+#   python -m venv .venv
+#   Linux / macOS : source .venv/bin/activate
+#   Windows       : .venv\Scripts\activate
 #   pip install -r requirements.txt
 #
 # PC/SC smart card access is optional (the application starts and runs without it)
-# and is NOT listed here: pyscard only builds once system packages are installed,
-# so listing it would make this whole installation fail on a fresh machine.
-# See docs/INSTALL_LINUX.md, then:
-#   sudo apt install pcscd pcsc-tools libpcsclite-dev python3-dev build-essential swig
-#   pip install ".[pcsc]"
+# and is NOT listed here: on Linux, pyscard only builds once system packages are
+# installed. Then: pip install ".[pcsc]"
 
 PySide6>=6.6
 SQLAlchemy>=2.0
@@ -18,3 +16,5 @@ pydantic>=2.6
 pydantic-settings>=2.2
 openpyxl>=3.1
 reportlab>=4.0
+# Windows does not ship the time zone database used by zoneinfo.
+tzdata; sys_platform == "win32"

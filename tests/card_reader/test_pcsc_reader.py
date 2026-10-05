@@ -134,6 +134,8 @@ def test_l_absence_de_pyscard_n_est_pas_une_erreur(monkeypatch: pytest.MonkeyPat
 def test_l_absence_de_pyscard_propose_la_commande_d_installation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Sous Linux, pyscard se compile : les paquets systeme sont cites."""
+    monkeypatch.setattr(sys, "platform", "linux")
     masquer_pyscard(monkeypatch)
 
     disponible, cause, action = diagnose_pcsc()
@@ -173,6 +175,7 @@ def test_l_absence_de_pyscard_leve_une_erreur_explicite_a_l_enumeration(
 def test_un_service_injoignable_propose_de_verifier_pcscd(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
     installer_pyscard(monkeypatch, RuntimeError("service not available"))
 
     disponible, cause, action = diagnose_pcsc()
@@ -501,3 +504,32 @@ def test_un_lecteur_configure_absent_est_nomme_dans_le_diagnostic(
 
     assert etat.status is CardStatus.NO_READER
     assert "Lecteur attendu" in (etat.detail or "")
+
+
+@pytest.mark.parametrize(
+    ("systeme", "attendu"),
+    [("win32", "services.msc"), ("darwin", "Mac"), ("linux", "systemctl")],
+)
+def test_le_diagnostic_du_service_est_adapte_au_systeme(
+    monkeypatch: pytest.MonkeyPatch, systeme: str, attendu: str
+) -> None:
+    monkeypatch.setattr(sys, "platform", systeme)
+    installer_pyscard(monkeypatch, RuntimeError("service not available"))
+
+    disponible, _, action = diagnose_pcsc()
+
+    assert disponible is False
+    assert attendu in action
+
+
+@pytest.mark.parametrize("systeme", ["win32", "darwin"])
+def test_pyscard_s_installe_directement_hors_linux(
+    monkeypatch: pytest.MonkeyPatch, systeme: str
+) -> None:
+    monkeypatch.setattr(sys, "platform", systeme)
+    masquer_pyscard(monkeypatch)
+
+    _, _, action = diagnose_pcsc()
+
+    assert action.endswith("pip install pyscard")
+    assert "apt" not in action

@@ -3,7 +3,7 @@
 Les dates sont stockees et calculees en UTC (convention des equipements
 tachygraphiques). Les horodatages administratifs, comme la date d'un import, sont
 en revanche lus par l'exploitant comme une heure de sa journee : ils sont donc
-convertis dans le fuseau d'affichage configure (``TACHY_TIMEZONE_DISPLAY``).
+convertis dans le fuseau d'affichage configure (``TACHOLIBRE_TIMEZONE_DISPLAY``).
 """
 
 from __future__ import annotations

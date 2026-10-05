@@ -64,7 +64,7 @@ def test_le_mode_verification_demarre_sans_interface(
 
     assert code == EXIT_OK
     sortie = capsys.readouterr().out
-    assert "tachy-linux" in sortie
+    assert "TachoLibre" in sortie
     assert "Schema de base" in sortie
 
 
@@ -153,3 +153,30 @@ def test_le_mode_verification_n_ouvre_jamais_de_boite_de_dialogue(
 
     assert main(["--check", "--data-dir", str(obstacle / "donnees")]) == EXIT_STARTUP_FAILURE
     assert "Action :" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("systeme", ["win32", "darwin"])
+def test_une_session_de_bureau_est_toujours_disponible_hors_linux(
+    monkeypatch: pytest.MonkeyPatch, systeme: str
+) -> None:
+    """Sans DISPLAY sous Windows ou macOS, la boite d'erreur doit quand meme s'afficher."""
+    from app import main as module
+
+    monkeypatch.setattr(module.sys, "platform", systeme)
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.setenv("QT_QPA_PLATFORM", "windows")
+
+    assert module._graphical_session_available() is True
+
+
+def test_linux_sans_serveur_d_affichage_n_ouvre_pas_de_fenetre(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app import main as module
+
+    monkeypatch.setattr(module.sys, "platform", "linux")
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.setenv("QT_QPA_PLATFORM", "xcb")
+
+    assert module._graphical_session_available() is False

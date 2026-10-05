@@ -91,7 +91,7 @@ def test_un_repertoire_de_donnees_impossible_produit_un_message_exploitable(
 
     message, cause, action = erreur.value.user_report()
     assert message and cause
-    assert "TACHY_DATA_DIR" in action
+    assert "TACHOLIBRE_DATA_DIR" in action
     assert "Traceback" not in message
 
 

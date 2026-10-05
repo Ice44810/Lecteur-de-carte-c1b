@@ -420,9 +420,12 @@ class ImportService(BaseService):
         temporary = directory / f".{digest}.partial"
         try:
             directory.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(inspection.path, temporary)
-            with temporary.open("rb") as handle:
-                os.fsync(handle.fileno())
+            # La copie est forcee sur disque depuis le descripteur d'ecriture : Windows
+            # refuse fsync sur un fichier ouvert en lecture seule.
+            with inspection.path.open("rb") as source, temporary.open("wb") as copy:
+                shutil.copyfileobj(source, copy)
+                copy.flush()
+                os.fsync(copy.fileno())
         except OSError as exc:
             temporary.unlink(missing_ok=True)
             raise StorageError(

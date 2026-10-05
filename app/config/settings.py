@@ -1,22 +1,22 @@
 """Parametres de l'application.
 
 Tous les chemins sont manipules avec ``pathlib`` et resolus dynamiquement : aucun
-chemin absolu de type ``/home/<utilisateur>/...`` n'est ecrit en dur (section 27
-du cahier des charges).
+chemin absolu n'est ecrit en dur (section 27 du cahier des charges).
 
 Ordre de priorite de la racine de donnees :
 
-1. variable d'environnement ``TACHY_DATA_DIR`` (ou ``.env``) ;
+1. variable d'environnement ``TACHOLIBRE_DATA_DIR`` (ou ``.env``) ;
 2. repertoire ``data/`` du depot lorsque l'application tourne depuis les sources
    (mode developpement, detecte par la presence de ``pyproject.toml``) ;
-3. ``$XDG_DATA_HOME/tachy-linux`` (par defaut ``~/.local/share/tachy-linux``)
-   lorsque l'application est installee sur le systeme.
+3. l'emplacement conventionnel du systeme (voir :mod:`app.config.platform_paths`).
 
-Toutes les variables d'environnement utilisent le prefixe ``TACHY_``. Exemple :
+Toutes les variables d'environnement utilisent le prefixe ``TACHOLIBRE_``. L'ancien
+prefixe ``TACHY_`` reste accepte lorsque la nouvelle variable n'est pas definie.
+Exemple :
 
 .. code-block:: bash
 
-    TACHY_DATA_DIR=/srv/tachy TACHY_LOG_LEVEL=DEBUG python -m app.main
+    TACHOLIBRE_DATA_DIR=/srv/tacholibre TACHOLIBRE_LOG_LEVEL=DEBUG python -m app.main
 """
 
 from __future__ import annotations
@@ -27,16 +27,19 @@ from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, computed_field, field_validator
+from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app import APP_NAME, APP_SLUG, ENV_PREFIX, LEGACY_ENV_PREFIX
+from app.config.platform_paths import default_data_dir, default_log_dir
 from app.core.exceptions import StorageError
 
 __all__ = ["Settings", "get_settings", "reset_settings_cache", "project_root"]
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-_APP_DIR_NAME = "tachy-linux"
+LEGACY_DATABASE_FILENAME = "tachy.sqlite3"
+"""Nom de la base des versions anterieures, reutilise s'il est present."""
 
 
 def project_root() -> Path:
@@ -56,9 +59,7 @@ def _default_data_dir() -> Path:
     root = project_root()
     if (root / "pyproject.toml").is_file():
         return root / "data"
-    xdg_data_home = os.environ.get("XDG_DATA_HOME")
-    base = Path(xdg_data_home) if xdg_data_home else Path.home() / ".local" / "share"
-    return base / _APP_DIR_NAME
+    return default_data_dir()
 
 
 def _default_log_dir() -> Path:
@@ -66,9 +67,7 @@ def _default_log_dir() -> Path:
     root = project_root()
     if (root / "pyproject.toml").is_file():
         return root / "logs"
-    xdg_state_home = os.environ.get("XDG_STATE_HOME")
-    base = Path(xdg_state_home) if xdg_state_home else Path.home() / ".local" / "state"
-    return base / _APP_DIR_NAME / "logs"
+    return default_log_dir()
 
 
 class Settings(BaseSettings):
@@ -90,20 +89,20 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="TACHY_",
+        env_prefix=ENV_PREFIX,
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
         validate_assignment=True,
     )
 
-    app_name: str = "tachy-linux"
+    app_name: str = APP_NAME
     company_name: str = ""
 
     data_dir: Path = Field(default_factory=_default_data_dir)
     log_dir: Path = Field(default_factory=_default_log_dir)
 
-    database_filename: str = "tachy.sqlite3"
+    database_filename: str = f"{APP_SLUG}.sqlite3"
     sql_echo: bool = False
     auto_migrate: bool = True
 
@@ -116,6 +115,23 @@ class Settings(BaseSettings):
     card_auto_download: bool = True
     timezone_display: str = "Europe/Paris"
 
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_environment(cls, data: object) -> object:
+        """Accepte les anciennes variables ``TACHY_*`` en l'absence des nouvelles.
+
+        Seules les variables d'environnement sont reprises ; un fichier ``.env``
+        doit utiliser le nouveau prefixe.
+        """
+        if not isinstance(data, dict):
+            return data
+        for name in cls.model_fields:
+            key = name.upper()
+            legacy = os.environ.get(f"{LEGACY_ENV_PREFIX}{key}")
+            if legacy is not None and name not in data and f"{ENV_PREFIX}{key}" not in os.environ:
+                data[name] = legacy
+        return data
+
     @field_validator("data_dir", "log_dir", mode="after")
     @classmethod
     def _expand(cls, value: Path) -> Path:
@@ -126,7 +142,7 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_filename(cls, value: str) -> str:
         """Refuse un nom de fichier contenant un separateur de chemin."""
-        if not value or "/" in value or value in {".", ".."}:
+        if not value or "/" in value or "\\" in value or value in {".", ".."}:
             raise ValueError("database_filename doit etre un simple nom de fichier")
         return value
 
@@ -172,8 +188,20 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_path(self) -> Path:
-        """Chemin complet du fichier SQLite."""
-        return self.database_dir / self.database_filename
+        """Chemin complet du fichier SQLite.
+
+        La base d'une version anterieure (``tachy.sqlite3``) est reutilisee tant que
+        la nouvelle n'existe pas : aucune donnee n'est perdue au changement de nom.
+        """
+        current = self.database_dir / self.database_filename
+        legacy = self.database_dir / LEGACY_DATABASE_FILENAME
+        if (
+            self.database_filename == f"{APP_SLUG}.sqlite3"
+            and not current.exists()
+            and legacy.exists()
+        ):
+            return legacy
+        return current
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -218,7 +246,7 @@ class Settings(BaseSettings):
                     cause="Les droits d'ecriture sont insuffisants ou le disque est plein.",
                     action=(
                         "Choisissez un autre repertoire de donnees "
-                        "(variable TACHY_DATA_DIR) ou corrigez les permissions."
+                        f"(variable {ENV_PREFIX}DATA_DIR) ou corrigez les permissions."
                     ),
                     technical_detail=str(exc),
                 ) from exc

@@ -2,7 +2,7 @@
 
 Le surveillant interroge le lecteur a intervalle regulier pendant toute la session,
 quelle que soit la page affichee. Lorsqu'une carte est inseree, et si
-``TACHY_CARD_AUTO_DOWNLOAD`` est actif, il lance le telechargement puis l'import en
+``TACHOLIBRE_CARD_AUTO_DOWNLOAD`` est actif, il lance le telechargement puis l'import en
 tache de fond : l'interface reste utilisable pendant la lecture, qui peut durer
 plusieurs dizaines de secondes.
 

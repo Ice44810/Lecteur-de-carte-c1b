@@ -1,7 +1,7 @@
 """Tests de la configuration.
 
 Exigence de la section 27 du cahier des charges : aucun chemin absolu ecrit en dur,
-tout passe par ``pathlib`` et par des variables d'environnement prefixees ``TACHY_``.
+tout passe par ``pathlib`` et par des variables d'environnement prefixees ``TACHOLIBRE_``.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ def test_url_de_base_est_une_url_sqlite(tmp_path: Path) -> None:
 def test_variables_d_environnement_prefixees(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("TACHY_DATA_DIR", str(tmp_path / "depuis-env"))
-    monkeypatch.setenv("TACHY_LOG_LEVEL", "ERROR")
+    monkeypatch.setenv("TACHOLIBRE_DATA_DIR", str(tmp_path / "depuis-env"))
+    monkeypatch.setenv("TACHOLIBRE_LOG_LEVEL", "ERROR")
     reset_settings_cache()
 
     settings = Settings()
@@ -81,7 +81,7 @@ def test_ensure_directories_explique_un_echec(tmp_path: Path) -> None:
         settings.ensure_directories()
 
     message, cause, action = exc_info.value.user_report()
-    assert "TACHY_DATA_DIR" in action
+    assert "TACHOLIBRE_DATA_DIR" in action
     assert message and cause
 
 

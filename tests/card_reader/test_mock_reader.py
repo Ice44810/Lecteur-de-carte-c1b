@@ -44,7 +44,8 @@ def test_pile_pcsc_indisponible_leve_une_erreur_explicite() -> None:
 
     message, cause, action = erreur.value.user_report()
     assert message and cause
-    assert "pcscd" in action
+    assert "PC/SC" in message
+    assert action
 
 
 # --------------------------------------------------------------------------- #

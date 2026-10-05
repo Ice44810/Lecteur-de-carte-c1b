@@ -4,7 +4,7 @@ Page en lecture seule pour l'essentiel : elle montre la configuration effective 
 resolus, base, journal, regles) afin que l'utilisateur ou le support puisse verifier ou
 sont reellement stockees les donnees. La modification des parametres depuis l'interface
 est prevue ulterieurement ; les valeurs sont deja surchargeables par variables
-d'environnement (prefixe ``TACHY_``) ou par un fichier ``.env``.
+d'environnement (prefixe ``TACHOLIBRE_``) ou par un fichier ``.env``.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ class SettingsPage(Page):
         self.content_layout.addWidget(
             NoticeBanner(
                 "Les chemins ci-dessous sont resolus au demarrage. Ils peuvent etre "
-                "modifies par les variables d'environnement TACHY_DATA_DIR, "
-                "TACHY_LOG_LEVEL, TACHY_DATABASE_FILENAME, ou par un fichier .env "
+                "modifies par les variables d'environnement TACHOLIBRE_DATA_DIR, "
+                "TACHOLIBRE_LOG_LEVEL, TACHOLIBRE_DATABASE_FILENAME, ou par un fichier .env "
                 "place a la racine du projet."
             )
         )

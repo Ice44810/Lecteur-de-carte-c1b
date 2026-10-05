@@ -1,6 +1,6 @@
 """Lecteur PC/SC reel, adosse a ``pyscard``.
 
-``pyscard`` et le service ``pcscd`` sont des dependances **optionnelles** : leur
+``pyscard`` et le service PC/SC sont des dependances **optionnelles** : leur
 absence ne doit jamais empecher l'application de demarrer. L'import de ``pyscard``
 est donc differe et toute indisponibilite est traduite en message explicite comportant
 une cause et une action (section 16 du cahier des charges).
@@ -21,6 +21,12 @@ from app.core.exceptions import (
     NoCardPresentError,
     NoReaderFoundError,
     PCSCUnavailableError,
+)
+from app.core.platform_help import (
+    pcsc_install_action,
+    pcsc_service_action,
+    pcsc_service_cause,
+    reader_detection_action,
 )
 
 __all__ = ["PCSCReader", "pyscard_available", "diagnose_pcsc"]
@@ -56,9 +62,7 @@ def diagnose_pcsc() -> tuple[bool, str, str]:
         return (
             False,
             "La bibliotheque Python pyscard n'est pas installee.",
-            "Installez les dependances systeme puis pyscard : "
-            "sudo apt install pcscd libpcsclite-dev python3-dev build-essential swig "
-            "&& pip install pyscard",
+            pcsc_install_action(),
         )
     try:
         from smartcard.System import readers as list_system_readers
@@ -70,17 +74,15 @@ def diagnose_pcsc() -> tuple[bool, str, str]:
     except Exception as exc:  # noqa: BLE001 - pyscard leve des exceptions variees
         return (
             False,
-            "Le service PC/SC n'a pas repondu.",
-            "Verifiez que le service pcscd est actif : sudo systemctl status pcscd "
-            "(puis sudo systemctl start pcscd). "
-            f"Detail technique : {exc}",
+            f"Le service PC/SC n'a pas repondu. {pcsc_service_cause()}",
+            f"{pcsc_service_action()} Detail technique : {exc}",
         )
 
     if not found:
         return (
             True,
             "Service PC/SC disponible, mais aucun lecteur n'est connecte.",
-            "Branchez le lecteur USB, puis verifiez sa detection avec la commande pcsc_scan.",
+            reader_detection_action(),
         )
     return (True, f"{len(found)} lecteur(s) detecte(s).", "")
 
@@ -277,10 +279,7 @@ class PCSCReader(CardReaderInterface):
             raise PCSCUnavailableError(
                 "Le support des lecteurs de carte n'est pas installe.",
                 cause="La bibliotheque Python pyscard est absente.",
-                action=(
-                    "Installez les dependances : sudo apt install pcscd libpcsclite-dev "
-                    "python3-dev build-essential swig && pip install pyscard"
-                ),
+                action=pcsc_install_action(),
                 technical_detail=str(exc),
             ) from exc
         try:

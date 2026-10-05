@@ -7,7 +7,7 @@ Une erreur se presente en trois temps :
 
     "Impossible de lire la carte."
     Cause  : "Le service PC/SC n'est pas disponible."
-    Action : "Verifiez que le service pcscd est actif."
+    Action : "Verifiez que le service PC/SC est actif."
 
 Le detail technique est journalise et reste consultable dans la boite de dialogue via
 « Afficher le detail technique », sans encombrer le message principal.
@@ -18,6 +18,7 @@ from __future__ import annotations
 from pydantic import ValidationError
 from PySide6.QtWidgets import QMessageBox, QWidget
 
+from app import ENV_PREFIX
 from app.config.logging_config import get_logger
 from app.core.exceptions import TachyError
 
@@ -42,7 +43,7 @@ def format_error(error: Exception) -> tuple[str, str, str, str | None]:
         return message, cause, action, error.technical_detail
     if isinstance(error, ValidationError):
         fields = ", ".join(
-            "TACHY_" + str(item["loc"][0]).upper() for item in error.errors() if item.get("loc")
+            ENV_PREFIX + str(item["loc"][0]).upper() for item in error.errors() if item.get("loc")
         )
         return (
             "La configuration de l'application est invalide.",

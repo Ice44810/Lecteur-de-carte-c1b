@@ -121,7 +121,7 @@ class CardReaderPage(Page):
 
         Le surveillant de la fenetre principale est utilise s'il existe ; sinon la
         page interroge elle-meme le lecteur tant qu'elle est affichee. Lorsque le
-        lecteur est desactive (``TACHY_PCSC_ENABLED=false``), la pile PC/SC n'est
+        lecteur est desactive (``TACHOLIBRE_PCSC_ENABLED=false``), la pile PC/SC n'est
         pas interrogee du tout.
         """
         if not self.context.settings.pcsc_enabled:
@@ -132,7 +132,7 @@ class CardReaderPage(Page):
         self._auto_value.setText(
             "Active : une carte inseree est telechargee et archivee"
             if self.context.settings.card_auto_download
-            else "Desactive (TACHY_CARD_AUTO_DOWNLOAD=false) : utilisez le bouton"
+            else "Desactive (TACHOLIBRE_CARD_AUTO_DOWNLOAD=false) : utilisez le bouton"
         )
         watcher = self._find_watcher()
         if watcher is not None:
@@ -240,12 +240,12 @@ class CardReaderPage(Page):
             "L'usage du lecteur de carte est desactive dans la configuration."
         )
         self._action_value.setText(
-            "Pour l'activer, positionnez TACHY_PCSC_ENABLED=true puis relancez l'application."
+            "Pour l'activer, positionnez TACHOLIBRE_PCSC_ENABLED=true puis relancez l'application."
         )
         self._readers_table.set_rows(())
         self._download_button.setEnabled(False)
         self._diagnostic_notice.set_text(
-            "Le lecteur de carte est desactive (TACHY_PCSC_ENABLED=false) : aucun "
+            "Le lecteur de carte est desactive (TACHOLIBRE_PCSC_ENABLED=false) : aucun "
             "diagnostic PC/SC n'est effectue."
         )
 

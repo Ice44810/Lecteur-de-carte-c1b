@@ -156,7 +156,7 @@ class ReportService(BaseService):
                 entreprise), ou le fichier n'a pas pu etre ecrit.
             CardReportError: Le conducteur demande n'existe pas.
         """
-        from app import __version__
+        from app import APP_NAME, __version__
         from app.reports.csv_export import write_csv
         from app.reports.excel import write_excel
         from app.reports.pdf import write_pdf
@@ -184,7 +184,7 @@ class ReportService(BaseService):
                 )
             tables = (summary_table(reports),)
             header = (
-                f"tachy-linux {__version__}, rapport entreprise"
+                f"{APP_NAME} {__version__}, rapport entreprise"
                 f"{' ' + self._settings.company_name if self._settings.company_name else ''}"
             )
         else:
@@ -194,7 +194,7 @@ class ReportService(BaseService):
                 period_end=request.period_end,
             )
             tables = card_report_tables(report)
-            header = f"tachy-linux {__version__}, {report.title}"
+            header = f"{APP_NAME} {__version__}, {report.title}"
 
         path = self.suggest_output_path(request)
         try:

@@ -161,6 +161,6 @@ def test_une_configuration_invalide_designe_la_variable_a_corriger() -> None:
 
     message, cause, action, detail = format_error(erreur.value)
     assert message == "La configuration de l'application est invalide."
-    assert "TACHY_TIMEZONE_DISPLAY" in cause
+    assert "TACHOLIBRE_TIMEZONE_DISPLAY" in cause
     assert ".env" in action
     assert detail

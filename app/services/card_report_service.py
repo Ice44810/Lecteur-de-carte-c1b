@@ -12,7 +12,7 @@ Le rapport reprend les rubriques d'usage des logiciels de lecture de carte :
 Les activites proviennent de la base ; les evenements, vehicules et lieux sont relus
 dans les fichiers archives du conducteur, qui en sont la source (aucune copie
 intermediaire n'est conservee). Les horaires sont exprimes dans le fuseau d'affichage
-(``TACHY_TIMEZONE_DISPLAY``).
+(``TACHOLIBRE_TIMEZONE_DISPLAY``).
 
 Decoupage en periodes de travail : deux periodes sont separees par une interruption
 (repos, activite inconnue ou absence d'enregistrement) d'au moins

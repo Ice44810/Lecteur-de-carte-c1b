@@ -21,7 +21,7 @@ def test_les_pragma_sqlite_sont_appliques(database: Database) -> None:
 
 
 def test_le_repertoire_de_la_base_est_cree(tmp_path: Path) -> None:
-    cible = tmp_path / "profond" / "sous" / "repertoire" / "tachy.sqlite3"
+    cible = tmp_path / "profond" / "sous" / "repertoire" / "tacholibre.sqlite3"
     database = Database(f"sqlite+pysqlite:///{cible}")
     try:
         assert cible.parent.is_dir()

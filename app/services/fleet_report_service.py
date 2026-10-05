@@ -17,7 +17,7 @@ dans l'interface et exportable en Excel :
 
 Sources : les activites viennent de la base ; vehicules utilises, kilometrages et
 evenements sont relus dans les fichiers de carte archives, qui en sont la source.
-Les journees sont celles du fuseau d'affichage (``TACHY_TIMEZONE_DISPLAY``).
+Les journees sont celles du fuseau d'affichage (``TACHOLIBRE_TIMEZONE_DISPLAY``).
 """
 
 from __future__ import annotations

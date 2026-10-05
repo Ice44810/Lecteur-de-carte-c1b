@@ -1,9 +1,9 @@
-# tachy-linux
+# TachoLibre
 
-Application de bureau Linux destinée aux entreprises de transport routier, pour
-l'archivage et l'analyse des données tachygraphiques : fichiers de carte
-conducteur (`.C1B`), fichiers d'unité embarquée (`.V1B`) et, à terme, lecture
-directe d'une carte conducteur via un lecteur PC/SC.
+Application de bureau pour **Windows, macOS et Linux** destinée aux entreprises de
+transport routier : lecture des cartes conducteur via un lecteur PC/SC, archivage
+et analyse des données tachygraphiques (fichiers de carte conducteur `.C1B`,
+fichiers d'unité embarquée `.V1B`).
 
 **État.** L'application lit une carte conducteur dès son insertion dans un lecteur
 PC/SC, décode les fichiers de carte (`.C1B`), enregistre conducteur, véhicules et
@@ -36,28 +36,30 @@ frontière, qui est délibérée : voir
 
 ## Installation
 
-Prérequis : Linux, Python 3.11 ou plus récent. La procédure détaillée, y compris
-les paquets système requis par Qt et par la pile PC/SC, est décrite dans
-[`docs/INSTALL_LINUX.md`](docs/INSTALL_LINUX.md).
+Prérequis : Windows 10/11, macOS 12 ou Linux, et Python 3.11 ou plus récent. La
+procédure complète pour chaque système, le diagnostic du lecteur et la
+construction d'un exécutable autonome sont décrits dans
+[`docs/INSTALLATION.md`](docs/INSTALLATION.md).
+
+En bref, depuis les sources :
 
 ```bash
 git clone https://github.com/Ice44810/Lecteur-de-carte-c1b.git
 cd Lecteur-de-carte-c1b
-python3 -m venv .venv
-source .venv/bin/activate
+python -m venv .venv            # Windows : py -m venv .venv
+source .venv/bin/activate       # Windows : .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install ".[pcsc]"           # lecteur de carte (Linux : paquets système d'abord)
 ```
 
-Le lecteur de carte est une dépendance optionnelle, car il exige des paquets
-système :
+Le lecteur de carte est facultatif : sous Windows et macOS, le service PC/SC est
+intégré au système ; sous Linux, installez d'abord `pcscd` et `libpcsclite-dev`.
+Sans lecteur, l'application fonctionne normalement et importe des fichiers `.C1B`.
 
-```bash
-sudo apt install pcscd pcsc-tools libpcsclite-dev
-pip install ".[pcsc]"
-```
-
-L'application fonctionne sans cette pile : l'absence de `pyscard` ou de service
-`pcscd` est traitée comme un diagnostic à afficher, pas comme une erreur.
+**Exécutable autonome.** `pip install ".[package,pcsc]"` puis
+`pyinstaller packaging/tacholibre.spec` produit `TachoLibre.exe` (Windows),
+`TachoLibre.app` (macOS) ou `TachoLibre` (Linux) dans `dist/`. Chaque système
+construit le sien.
 
 ## Démarrage
 
@@ -73,11 +75,11 @@ python -m app.main --check
 ```
 
 ```
-tachy-linux 0.1.0
-Racine des donnees   : /srv/tachy
-Fichiers originaux   : /srv/tachy/originals
-Base de donnees      : /srv/tachy/database/tachy.sqlite3
-Journal              : /home/exploitation/.local/state/tachy-linux/logs/app.log
+TachoLibre 0.1.0
+Racine des donnees   : /srv/tacholibre
+Fichiers originaux   : /srv/tacholibre/originals
+Base de donnees      : /srv/tacholibre/database/tacholibre.sqlite3
+Journal              : /home/exploitation/.local/state/tacholibre/logs/app.log
 Schema de base       : version 1
 ```
 
@@ -170,7 +172,7 @@ dernier téléchargement qu'elle mémorise (`LastCardDownload`) n'est pas mise �
 Chaque commande et chaque identifiant cite son exigence dans le règlement
 d'exécution (UE) 2016/799, annexe IC (appendices 2 et 7). Ces points sont à l'état
 « En cours de validation » tant qu'un téléchargement réel n'a pas été vérifié avec
-un outil tiers. Désactivable avec `TACHY_CARD_AUTO_DOWNLOAD=false`.
+un outil tiers. Désactivable avec `TACHOLIBRE_CARD_AUTO_DOWNLOAD=false`.
 
 ## Ce qu'elle ne fait pas encore
 
@@ -266,21 +268,27 @@ détails sont dans [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Configuration
 
-Toutes les variables d'environnement portent le préfixe `TACHY_` et peuvent
-également être placées dans un fichier `.env`. Les chemins sont manipulés avec
-`pathlib` ; aucun chemin absolu n'est écrit en dur.
+Toutes les variables d'environnement portent le préfixe `TACHOLIBRE_` et peuvent
+également être placées dans un fichier `.env`. L'ancien préfixe `TACHY_` reste
+accepté. Les chemins sont manipulés avec `pathlib` ; aucun chemin absolu n'est
+écrit en dur.
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
-| `TACHY_DATA_DIR` | `data/` depuis les sources, sinon `~/.local/share/tachy-linux` | Racine des données |
-| `TACHY_LOG_DIR` | `logs/` depuis les sources, sinon `~/.local/state/tachy-linux/logs` | Répertoire des journaux |
-| `TACHY_LOG_LEVEL` | `INFO` | Niveau du journal `app.log` |
-| `TACHY_CONSOLE_LOG_LEVEL` | `WARNING` | Niveau affiché sur la sortie standard |
-| `TACHY_COMPANY_NAME` | vide | Raison sociale, utilisée en en-tête de rapport |
-| `TACHY_AUTO_MIGRATE` | `true` | Applique les migrations au démarrage |
-| `TACHY_PCSC_ENABLED` | `true` | Autorise l'usage du lecteur PC/SC |
-| `TACHY_CARD_AUTO_DOWNLOAD` | `true` | Télécharge et importe la carte dès son insertion |
-| `TACHY_TIMEZONE_DISPLAY` | `Europe/Paris` | Fuseau d'affichage des horodatages d'import (le stockage et les frises d'activité restent en UTC) |
+| `TACHOLIBRE_DATA_DIR` | `data/` depuis les sources, sinon l'emplacement du système (voir ci-dessous) | Racine des données |
+| `TACHOLIBRE_LOG_DIR` | `logs/` depuis les sources, sinon l'emplacement du système | Répertoire des journaux |
+| `TACHOLIBRE_LOG_LEVEL` | `INFO` | Niveau du journal `app.log` |
+| `TACHOLIBRE_CONSOLE_LOG_LEVEL` | `WARNING` | Niveau affiché sur la sortie standard |
+| `TACHOLIBRE_COMPANY_NAME` | vide | Raison sociale, utilisée en en-tête de rapport |
+| `TACHOLIBRE_AUTO_MIGRATE` | `true` | Applique les migrations au démarrage |
+| `TACHOLIBRE_PCSC_ENABLED` | `true` | Autorise l'usage du lecteur PC/SC |
+| `TACHOLIBRE_CARD_AUTO_DOWNLOAD` | `true` | Télécharge et importe la carte dès son insertion |
+| `TACHOLIBRE_TIMEZONE_DISPLAY` | `Europe/Paris` | Fuseau d'affichage des horodatages d'import (le stockage et les frises d'activité restent en UTC) |
+
+Emplacement des données hors mode développement : `%LOCALAPPDATA%\TachoLibre`
+(Windows), `~/Library/Application Support/TachoLibre` (macOS),
+`~/.local/share/tacholibre` (Linux). Une installation sous l'ancien nom
+`tachy-linux` reste utilisée telle quelle.
 
 La racine de données contient `originals/` (archivage immuable), `imports/`
 (travail), `database/` et `exports/`.
@@ -289,12 +297,12 @@ La racine de données contient `originals/` (archivage immuable), `imports/`
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                  # 838 tests
+python -m pytest                                  # 866 tests
 python -m pytest --cov=app --cov-report=term-missing
 ruff check app tests && ruff format --check app tests
 ```
 
-838 tests couvrent 96 % des instructions de `app` (hors interface et point
+866 tests couvrent 96 % des instructions de `app` (hors interface et point
 d'entrée, testés séparément). Les tests d'interface s'exécutent sans écran grâce
 à `QT_QPA_PLATFORM=offscreen`, positionné automatiquement, et les tests PC/SC
 n'exigent aucun matériel : la bibliothèque `pyscard` y est remplacée par un
@@ -303,15 +311,15 @@ carte en cours de lecture.
 
 | Domaine | Tests |
 | --- | --- |
-| `tests/services` | 172 |
+| `tests/services` | 174 |
 | `tests/analysis` | 133 |
-| `tests/card_reader` | 141 |
+| `tests/card_reader` | 146 |
 | `tests/parser` | 114 |
 | `tests/core` | 80 |
 | `tests/database` | 82 |
-| `tests/ui` | 73 |
-| `tests/config` | 19 |
-| Démarrage (`bootstrap`, `main`) | 24 |
+| `tests/ui` | 76 |
+| `tests/config` | 34 |
+| Démarrage (`bootstrap`, `main`) | 27 |
 
 Le projet n'est pas considéré comme livrable si un test échoue.
 
@@ -331,13 +339,13 @@ Le projet n'est pas considéré comme livrable si un test échoue.
 | 10 | Import V1B | à faire |
 | 11 | Lecteur PC/SC | terminée |
 | 12 | Lecture d'une carte conducteur | terminée, en lecture seule (validée sur une carte réelle) |
-| 13 | Paquet Linux (`.deb`, AppImage) | à faire |
+| 13 | Exécutables Windows, macOS et Linux | recette PyInstaller prête ; signature à faire |
 | 14 | API REST (FastAPI) | à faire |
 | 15 | Synchronisation TMS | à faire |
 
 ## Documentation
 
-- [`docs/INSTALL_LINUX.md`](docs/INSTALL_LINUX.md) — installation, paquets
+- [`docs/INSTALLATION.md`](docs/INSTALLATION.md) — installation sous Windows, macOS et Linux, exécutable autonome, paquets
   système, diagnostic de la pile PC/SC.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — couches, flux de données,
   conventions.

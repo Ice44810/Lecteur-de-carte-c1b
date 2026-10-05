@@ -2,7 +2,7 @@
 
 Principes retenus :
 
-* **aucun test n'ecrit dans le repertoire de donnees reel** : ``TACHY_DATA_DIR`` est
+* **aucun test n'ecrit dans le repertoire de donnees reel** : ``TACHOLIBRE_DATA_DIR`` est
   redirige vers un repertoire temporaire pour toute la session, avant le premier
   import d'un module applicatif qui lirait la configuration ;
 * **chaque test dispose d'une base vierge**, creee par le vrai mecanisme de
@@ -36,11 +36,12 @@ def _isolated_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[
     """Redirige la racine de donnees vers un repertoire temporaire de session."""
     root = tmp_path_factory.mktemp("tachy-data")
     previous = {
-        key: os.environ.get(key) for key in ("TACHY_DATA_DIR", "TACHY_LOG_DIR", "TACHY_LOG_LEVEL")
+        key: os.environ.get(key)
+        for key in ("TACHOLIBRE_DATA_DIR", "TACHOLIBRE_LOG_DIR", "TACHOLIBRE_LOG_LEVEL")
     }
-    os.environ["TACHY_DATA_DIR"] = str(root)
-    os.environ["TACHY_LOG_DIR"] = str(root / "logs")
-    os.environ["TACHY_LOG_LEVEL"] = "DEBUG"
+    os.environ["TACHOLIBRE_DATA_DIR"] = str(root)
+    os.environ["TACHOLIBRE_LOG_DIR"] = str(root / "logs")
+    os.environ["TACHOLIBRE_LOG_LEVEL"] = "DEBUG"
     # Toute creation de widget pendant les tests doit rester sans ecran : sans cette
     # variable, Qt interrompt brutalement le processus au lieu de lever une exception.
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

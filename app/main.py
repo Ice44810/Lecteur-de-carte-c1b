@@ -30,7 +30,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from app import __version__
+from app import APP_NAME, APP_SLUG, ENV_PREFIX, __version__
 from app.bootstrap import ApplicationContext, bootstrap
 from app.config.logging_config import get_logger
 from app.config.settings import Settings
@@ -50,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
         L'analyseur configure.
     """
     parser = argparse.ArgumentParser(
-        prog="tachy-linux",
+        prog=APP_SLUG,
         description=(
             "Archivage et analyse de fichiers tachygraphiques (C1B / V1B) "
             "pour entreprises de transport routier."
@@ -59,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"tachy-linux {__version__}",
+        version=f"{APP_NAME} {__version__}",
     )
     parser.add_argument(
         "--data-dir",
@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="CHEMIN",
         help=(
             "Racine des donnees applicatives (equivaut a la variable "
-            "d'environnement TACHY_DATA_DIR)."
+            f"d'environnement {ENV_PREFIX}DATA_DIR)."
         ),
     )
     parser.add_argument(
@@ -111,13 +111,16 @@ def _build_settings(arguments: argparse.Namespace) -> Settings | None:
 def _graphical_session_available() -> bool:
     """Indique si une boite de dialogue peut etre affichee a un utilisateur.
 
-    Sans serveur d'affichage, Qt interrompt brutalement le processus a la creation de
-    l'application (erreur fatale non interceptable) ; avec la plate-forme
-    ``offscreen``, une boite modale bloquerait indefiniment sans que personne ne
-    puisse la fermer. Dans ces deux cas, la sortie d'erreur suffit.
+    Sous Windows et macOS, une session de bureau est toujours disponible. Sous Linux,
+    sans serveur d'affichage, Qt interrompt brutalement le processus a la creation de
+    l'application (erreur fatale non interceptable). Dans tous les cas, la plate-forme
+    ``offscreen`` ou ``minimal`` n'a personne pour fermer une boite modale : la sortie
+    d'erreur suffit.
     """
     if os.environ.get("QT_QPA_PLATFORM", "").startswith(("offscreen", "minimal")):
         return False
+    if sys.platform.startswith("win") or sys.platform == "darwin":
+        return True
     return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 
@@ -171,7 +174,7 @@ def run_checks(context: ApplicationContext) -> str:
     """
     settings = context.settings
     lines = [
-        f"tachy-linux {__version__}",
+        f"{APP_NAME} {__version__}",
         f"Racine des donnees   : {settings.data_dir}",
         f"Fichiers originaux   : {settings.originals_dir}",
         f"Base de donnees      : {settings.database_path}",
@@ -185,6 +188,22 @@ def run_checks(context: ApplicationContext) -> str:
     return "\n".join(lines)
 
 
+def _tolerant_console() -> None:
+    """Evite qu'un caractere non affichable par la console fasse echouer un message.
+
+    Une console Windows redirigee vers un fichier utilise souvent un encodage limite
+    (cp1252) : un guillemet ou un accent inattendu leverait une erreur d'encodage au
+    moment precis ou l'on veut expliquer une autre erreur.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(errors="replace")
+            except (OSError, ValueError):  # pragma: no cover - flux non reconfigurable
+                pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Demarre l'application.
 
@@ -194,6 +213,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         Le code de sortie du processus.
     """
+    _tolerant_console()
     arguments = build_parser().parse_args(argv)
 
     try:
@@ -214,7 +234,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     application = QApplication.instance() or QApplication(sys.argv[:1])
     application.setApplicationName(context.settings.app_name)
     application.setApplicationVersion(__version__)
-    application.setOrganizationName(context.settings.company_name or "tachy-linux")
+    application.setOrganizationName(context.settings.company_name or APP_NAME)
 
     watcher = CardWatcher(context)
     window = MainWindow(context, card_watcher=watcher)
