@@ -11,10 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
+from app.analysis.activities import clip_to_period, normalize_intervals, to_intervals
+from app.analysis.models import PeriodTotals
 from app.analysis.rules import RuleRegistry, RuleSet, default_registry, empty_ruleset
 from app.config.logging_config import get_logger
 from app.core.enums import ActivityType, FileType, ParsingStatus
 from app.core.timeutils import format_duration, utcnow, week_bounds
+from app.database.models import Activity
 from app.database.repositories import (
     ActivityRepository,
     DriverRepository,
@@ -198,6 +201,9 @@ class DashboardService(BaseService):
             imports = ImportRepository(session)
             activities = ActivityRepository(session)
             infringements = InfringementRepository(session)
+            week_totals = self._period_totals(
+                activities, period_start=week_start, period_end=week_end
+            )
 
             data = DashboardData(
                 drivers_count=drivers.count(),
@@ -211,16 +217,8 @@ class DashboardService(BaseService):
                 ),
                 last_import_at=imports.last_import_datetime(),
                 open_alerts_count=infringements.count_open(),
-                week_driving_seconds=activities.total_duration(
-                    activity_type=ActivityType.DRIVING,
-                    period_start=week_start,
-                    period_end=week_end,
-                ),
-                week_rest_seconds=activities.total_duration(
-                    activity_type=ActivityType.REST,
-                    period_start=week_start,
-                    period_end=week_end,
-                ),
+                week_driving_seconds=week_totals.driving,
+                week_rest_seconds=week_totals.rest,
                 active_drivers_this_week=activities.count_drivers_with_activity(
                     period_start=week_start, period_end=week_end
                 ),
@@ -242,6 +240,31 @@ class DashboardService(BaseService):
     # ------------------------------------------------------------------ #
     # Interne
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _period_totals(
+        repository: ActivityRepository, *, period_start: datetime, period_end: datetime
+    ) -> PeriodTotals:
+        """Cumule les durees de tous les conducteurs sur une periode.
+
+        Les activites a cheval sur les bornes sont decoupees, et non ignorees : un
+        repos commence le dimanche soir compte pour sa partie situee dans la semaine.
+        Les chevauchements eventuels sont traites conducteur par conducteur, comme
+        dans :class:`~app.services.analysis_service.AnalysisService`.
+        """
+        by_driver: dict[int, list[Activity]] = {}
+        for activity in repository.list_overlapping(
+            period_start=period_start, period_end=period_end
+        ):
+            by_driver.setdefault(activity.driver_id, []).append(activity)
+
+        totals = PeriodTotals()
+        for driver_activities in by_driver.values():
+            normalized = normalize_intervals(to_intervals(driver_activities), on_overlap="truncate")
+            totals += PeriodTotals.from_intervals(
+                clip_to_period(normalized, period_start, period_end)
+            )
+        return totals
+
     @staticmethod
     def _recent_activity(session: object, *, limit: int) -> tuple[RecentActivityLine, ...]:
         """Construit les lignes d'activite recente, une par conducteur et par jour."""

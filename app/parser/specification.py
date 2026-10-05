@@ -21,9 +21,14 @@ references sont citees) :
 Regle d'usage : tant qu'une entree de :data:`OPEN_QUESTIONS` porte le statut
 ``OPEN``, le code correspondant doit lever
 :class:`~app.core.exceptions.UnconfirmedStructureError` plutot que produire une
-valeur. Une entree ne passe a ``CONFIRMED`` que lorsque deux conditions sont
-reunies : la reference precise de la specification est renseignee, et un fichier
-reel de test valide le decodage dans ``tests/fixtures/``.
+valeur. Une entree passe a ``IN_REVIEW`` lorsque la reference precise du texte
+officiel est renseignee (exigence et numero de paragraphe) : le code peut alors
+etre utilise, en lecture seule, pour etre valide sur materiel reel. Elle ne passe a
+``CONFIRMED`` que lorsqu'un fichier reel de test valide le resultat dans
+``tests/fixtures/``.
+
+Texte de reference utilise : version consolidee du reglement d'execution
+(UE) 2016/799 publiee sur EUR-Lex (document 02016R0799-20230821).
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ __all__ = [
     "REFERENCE_DOCUMENTS",
     "questions_for",
     "is_confirmed",
+    "is_referenced",
     "unconfirmed_topics",
 ]
 
@@ -105,7 +111,12 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "conducteur : nature et taille du marqueur de debut de chaque bloc, codage de "
             "la longueur, et emplacement des blocs de signature."
         ),
-        reference="Annexe I C, appendice 7 (protocole de telechargement), section carte conducteur",
+        reference=(
+            "Annexe I C, appendice 7, DDP_041 a DDP_046 : concatenation d'objets TLV, "
+            "etiquette = FID + '00' (donnees G1) / '01' (signature G1) / '02' (donnees G2) "
+            "/ '03' (signature G2), longueur sur 2 octets"
+        ),
+        status=ConfirmationStatus.IN_REVIEW,
     ),
     OpenQuestion(
         topic="c1b",
@@ -114,7 +125,11 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "Liste des identifiants de blocs presents dans un telechargement de carte et "
             "correspondance avec les fichiers elementaires de la carte."
         ),
-        reference="Annexe I C, appendice 2 (structure de fichiers de la carte)",
+        reference=(
+            "Annexe I C, appendice 2, TCS_142 (MF), TCS_148 (DF Tachograph) et TCS_152 "
+            "(DF Tachograph_G2) ; appendice 7, DDP_035"
+        ),
+        status=ConfirmationStatus.IN_REVIEW,
     ),
     OpenQuestion(
         topic="c1b",
@@ -125,8 +140,11 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "validite), y compris la page de codes utilisee pour les caracteres."
         ),
         reference=(
-            "Annexe I C, appendice 1 (types CardIdentification, DriverCardHolderIdentification)"
+            "Annexe I C, appendice 1 : CardIdentification (2.24), "
+            "DriverCardHolderIdentification (2.62), HolderName (2.83), Name (2.99), "
+            "CardNumber (2.26), CardDrivingLicenceInformation (2.18) ; chapitre 4"
         ),
+        status=ConfirmationStatus.IN_REVIEW,
     ),
     OpenQuestion(
         topic="c1b",
@@ -135,7 +153,11 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "Codage des enregistrements de changement d'activite : bits de mode d'activite, "
             "minute de la journee, et regle de reconstitution des bornes de fin de periode."
         ),
-        reference="Annexe I C, appendice 1 (type ActivityChangeInfo)",
+        reference=(
+            "Annexe I C, appendice 1 : ActivityChangeInfo (2.1), CardActivityDailyRecord "
+            "(2.9), CardDriverActivity (2.17)"
+        ),
+        status=ConfirmationStatus.IN_REVIEW,
     ),
     OpenQuestion(
         topic="c1b",
@@ -144,7 +166,11 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "Codage des horodatages et referentiel temporel applique (UTC ou heure locale) "
             "pour chaque type de date du dictionnaire de donnees."
         ),
-        reference="Annexe I C, appendice 1 (types TimeReal, Datef)",
+        reference=(
+            "Annexe I C, appendice 1 : TimeReal (2.162, secondes depuis le 1er janvier "
+            "1970 UTC), Datef (2.57, BCD)"
+        ),
+        status=ConfirmationStatus.IN_REVIEW,
     ),
     OpenQuestion(
         topic="c1b",
@@ -153,7 +179,11 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "Table de correspondance entre les codes d'evenements et d'anomalies et leur "
             "libelle, pour chaque generation d'equipement."
         ),
-        reference="Annexe I C, appendice 1 (types EventFaultType)",
+        reference=(
+            "Annexe I C, appendice 1 : EventFaultType (2.70) ; codes pays : liste du JRC "
+            "(NationNumeric 2.101)"
+        ),
+        status=ConfirmationStatus.IN_REVIEW,
         blocking=False,
     ),
     OpenQuestion(
@@ -203,7 +233,11 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "Identifiant d'application (AID) et sequence de selection a utiliser pour "
             "acceder a l'application tachygraphique d'une carte conducteur."
         ),
-        reference="Annexe I C, appendice 2 (selection de l'application tachygraphique)",
+        reference=(
+            "Annexe I C, appendice 2, TCS_37 : SELECT 00 A4 04 0C, AID FF 54 41 43 48 4F "
+            "(G1) et FF 53 4D 52 44 54 (G2) ; TCS_145"
+        ),
+        status=ConfirmationStatus.IN_REVIEW,
     ),
     OpenQuestion(
         topic="card",
@@ -212,7 +246,11 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "Identifiants des fichiers elementaires a lire et ordre de lecture pour "
             "reconstituer un telechargement complet."
         ),
-        reference="Annexe I C, appendice 2 (structure de fichiers)",
+        reference=(
+            "Annexe I C, appendice 2, TCS_142, TCS_148 et TCS_152 ; appendice 7, DDP_035 "
+            "(fichiers obligatoires d'une carte conducteur, exclusion de Card_Download)"
+        ),
+        status=ConfirmationStatus.IN_REVIEW,
     ),
     OpenQuestion(
         topic="card",
@@ -221,7 +259,12 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "Sequence exacte des commandes de lecture (selection, lecture par blocs, "
             "gestion des reponses longues) et traitement des mots d'etat renvoyes."
         ),
-        reference="Annexe I C, appendice 2 (commandes) et ISO/IEC 7816-4",
+        reference=(
+            "Annexe I C, appendice 2, TCS_39 (SELECT EF 00 A4 02 0C), TCS_42-43 (READ "
+            "BINARY), TCS_124 (PERFORM HASH OF FILE 80 2A 90 00), TCS_130 (PSO COMPUTE "
+            "DIGITAL SIGNATURE 00 2A 9E 9A) ; appendice 7, DDP_037-038"
+        ),
+        status=ConfirmationStatus.IN_REVIEW,
     ),
     OpenQuestion(
         topic="card",
@@ -230,7 +273,8 @@ OPEN_QUESTIONS: tuple[OpenQuestion, ...] = (
             "Regles d'assemblage des donnees lues sur la carte en un fichier .C1B "
             "conforme, afin qu'il soit exploitable par des outils tiers."
         ),
-        reference="Annexe I C, appendice 7 (format du fichier de telechargement)",
+        reference="Annexe I C, appendice 7, DDP_040 a DDP_046 (format du fichier)",
+        status=ConfirmationStatus.IN_REVIEW,
     ),
 )
 """Points de specification a confirmer, par domaine."""
@@ -262,6 +306,30 @@ def unconfirmed_topics() -> tuple[str, ...]:
         if question.blocking and question.status is not ConfirmationStatus.CONFIRMED
     }
     return tuple(sorted(topics))
+
+
+def is_referenced(topic: str, *, code: str | None = None) -> bool:
+    """Indique si les questions d'un domaine sont au moins referencees.
+
+    Une question referencee (``IN_REVIEW`` ou ``CONFIRMED``) cite l'exigence precise
+    du texte officiel : le code correspondant peut etre execute pour etre valide sur
+    materiel reel. Une question ``OPEN`` interdit toute execution.
+
+    Args:
+        topic: Domaine evalue.
+        code: Restreint l'evaluation a une question precise.
+
+    Returns:
+        ``True`` si aucune question concernee n'est a l'etat ``OPEN``.
+    """
+    questions = [
+        question
+        for question in questions_for(topic, blocking_only=code is None)
+        if code is None or question.code == code
+    ]
+    return bool(questions) and all(
+        question.status is not ConfirmationStatus.OPEN for question in questions
+    )
 
 
 def is_confirmed(topic: str) -> bool:

@@ -16,9 +16,33 @@ from sqlalchemy.orm import Session
 
 from app.database.models.base import Base
 
-__all__ = ["BaseRepository", "ModelT"]
+__all__ = ["BaseRepository", "ModelT", "LIKE_ESCAPE", "like_pattern"]
 
 ModelT = TypeVar("ModelT", bound=Base)
+
+LIKE_ESCAPE = "\\"
+"""Caractere d'echappement utilise dans les motifs ``LIKE``."""
+
+
+def like_pattern(term: str) -> str:
+    """Construit un motif ``LIKE`` « contient », jokers saisis neutralises.
+
+    Sans echappement, un ``%`` ou un ``_`` saisi par l'utilisateur serait interprete
+    comme un joker : rechercher ``_`` retournerait alors toutes les lignes.
+
+    Args:
+        term: Fragment recherche, tel que saisi.
+
+    Returns:
+        Le motif a utiliser avec ``escape=LIKE_ESCAPE``.
+    """
+    escaped = (
+        term.strip()
+        .replace(LIKE_ESCAPE, LIKE_ESCAPE * 2)
+        .replace("%", f"{LIKE_ESCAPE}%")
+        .replace("_", f"{LIKE_ESCAPE}_")
+    )
+    return f"%{escaped}%"
 
 
 class BaseRepository(Generic[ModelT]):

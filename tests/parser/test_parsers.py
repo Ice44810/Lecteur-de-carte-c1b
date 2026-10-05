@@ -1,9 +1,7 @@
-"""Tests des parsers C1B et V1B.
+"""Tests des parsers C1B et V1B : detection, validation, refus documentes.
 
-Ces tests verifient une exigence centrale du cahier des charges : **aucune structure
-binaire n'est devinee**. Le decodage doit refuser de produire une valeur tant que la
-structure concernee n'a pas ete confirmee, tout en laissant le reste de l'application
-fonctionner (archivage, empreinte, journal des imports).
+Le decodage du contenu d'une carte est teste dans ``test_c1b_decoding.py``. Le format
+V1B, dont les structures ne sont pas referencees, doit toujours refuser d'inventer.
 """
 
 from __future__ import annotations
@@ -21,7 +19,7 @@ from app.core.exceptions import (
 )
 from app.parser import C1BParser, V1BParser, detect_file_type, get_parser_for
 from app.parser.base import MINIMUM_PLAUSIBLE_SIZE
-from app.parser.models import DiagnosticLevel
+from tests.parser.c1b_synthetique import CarteSynthetique
 
 
 # --------------------------------------------------------------------------- #
@@ -88,33 +86,36 @@ def test_fichier_absent_signale_un_probleme_de_stockage(tmp_path: Path) -> None:
         C1BParser.from_path(tmp_path / "absent.C1B")
 
 
-def test_le_parser_ne_modifie_pas_le_fichier(opaque_c1b_file: Path) -> None:
-    avant = opaque_c1b_file.read_bytes()
+def test_le_parser_ne_modifie_pas_le_fichier(tmp_path: Path) -> None:
+    fichier = tmp_path / "carte.C1B"
+    fichier.write_bytes(CarteSynthetique().fichier())
+    avant = fichier.read_bytes()
 
-    C1BParser.from_path(opaque_c1b_file).parse()
+    C1BParser.from_path(fichier).parse()
 
-    assert opaque_c1b_file.read_bytes() == avant
+    assert fichier.read_bytes() == avant
 
 
-# --------------------------------------------------------------------------- #
-# Decodage : incertitude assumee
-# --------------------------------------------------------------------------- #
-def test_le_decodage_c1b_n_est_pas_annonce_comme_disponible(opaque_c1b_file: Path) -> None:
-    parser = C1BParser.from_path(opaque_c1b_file)
+def test_un_fichier_sans_structure_de_carte_est_refuse(opaque_c1b_file: Path) -> None:
+    """Un contenu quelconque n'est jamais interprete comme une carte."""
+    with pytest.raises(ParsingError) as exc_info:
+        C1BParser.from_path(opaque_c1b_file).parse()
+
+    message, cause, action = exc_info.value.user_report()
+    assert message and cause and action
+
+
+def test_le_decodage_c1b_est_disponible_et_reference() -> None:
+    parser = C1BParser(CarteSynthetique().fichier())
+
+    assert parser.decoding_available is True
+
+
+def test_les_extractions_v1b_refusent_d_inventer(opaque_v1b_file: Path) -> None:
+    parser = V1BParser.from_path(opaque_v1b_file)
 
     assert parser.decoding_available is False
-    assert parser.blocking_questions
-
-
-def test_les_extractions_c1b_refusent_d_inventer(opaque_c1b_file: Path) -> None:
-    parser = C1BParser.from_path(opaque_c1b_file)
-
-    for extraction in (
-        parser.extract_driver,
-        parser.extract_activities,
-        parser.extract_events,
-        parser.extract_technical_data,
-    ):
+    for extraction in (parser.extract_vehicle, parser.extract_activities, parser.extract_events):
         with pytest.raises(UnconfirmedStructureError) as exc_info:
             extraction()
         assert "confirmer" in (exc_info.value.technical_detail or "")
@@ -127,27 +128,6 @@ def test_un_telechargement_de_carte_ne_porte_pas_de_vehicule(opaque_c1b_file: Pa
 
 def test_un_telechargement_de_vehicule_ne_porte_pas_de_titulaire(opaque_v1b_file: Path) -> None:
     assert V1BParser.from_path(opaque_v1b_file).extract_driver() is None
-
-
-def test_parse_retourne_un_resultat_partiel_documente(opaque_c1b_file: Path) -> None:
-    resultat = C1BParser.from_path(opaque_c1b_file).parse()
-
-    assert resultat.file_type is FileType.C1B
-    assert resultat.is_complete is False
-    assert resultat.has_warnings is True
-    assert resultat.driver is None
-    assert resultat.activities == ()
-    codes = {diagnostic.code for diagnostic in resultat.diagnostics}
-    assert codes == {"STRUCTURE_NOT_CONFIRMED"}
-    assert all(diagnostic.level is DiagnosticLevel.WARNING for diagnostic in resultat.diagnostics)
-
-
-def test_les_diagnostics_expliquent_pourquoi_rien_n_est_decode(opaque_c1b_file: Path) -> None:
-    resultat = C1BParser.from_path(opaque_c1b_file).parse()
-
-    for diagnostic in resultat.diagnostics:
-        assert "structure" in diagnostic.message.lower()
-        assert diagnostic.detail
 
 
 def test_parse_v1b_retourne_aussi_un_resultat_partiel(opaque_v1b_file: Path) -> None:

@@ -1,11 +1,11 @@
 """Construction et interpretation des commandes APDU (ISO/IEC 7816-4).
 
-Perimetre volontairement limite : ce module ne contient que ce qui est defini par la
-norme ISO/IEC 7816-4, c'est-a-dire la **forme** des commandes et la signification des
-mots d'etat. Il ne contient **aucun** identifiant de fichier, aucun identifiant
-d'application et aucune sequence propres a la carte tachygraphique : ces elements
-doivent etre confirmes a partir de l'annexe I C, appendice 2, et sont recenses dans
-:mod:`app.parser.specification` (domaine ``card``).
+Perimetre volontairement limite : ce module ne contient que la **forme** des
+commandes et la signification des mots d'etat, telles que definies par la norme
+ISO/IEC 7816-4 et, pour les deux commandes de securite utilisees lors d'un
+telechargement, par le reglement d'execution (UE) 2016/799, annexe I C, appendice 2
+(TCS_124 et TCS_130). Il ne contient aucun identifiant de fichier ni aucune
+sequence : ceux-ci sont dans :mod:`app.card_reader.tachograph_card`, avec leur source.
 
 Cette separation est le garde-fou demande en section 15 du cahier des charges : une
 carte tachygraphique ne doit pas etre supposee se comporter comme une carte a puce
@@ -23,9 +23,12 @@ __all__ = [
     "APDUCommand",
     "APDUResponse",
     "StatusWord",
+    "select_application",
     "select_file_by_identifier",
     "read_binary",
     "get_response",
+    "perform_hash_of_file",
+    "compute_digital_signature",
 ]
 
 
@@ -208,18 +211,76 @@ class APDUResponse:
 # Commandes generiques ISO/IEC 7816-4
 # --------------------------------------------------------------------------- #
 CLA_ISO = 0x00
+CLA_PROPRIETARY = 0x80
 INS_SELECT = 0xA4
 INS_READ_BINARY = 0xB0
 INS_GET_RESPONSE = 0xC0
+INS_PERFORM_SECURITY_OPERATION = 0x2A
+
+
+def select_application(application_identifier: bytes) -> APDUCommand:
+    """Construit une commande SELECT par nom d'application (AID).
+
+    Source : reglement (UE) 2016/799, annexe I C, appendice 2, TCS_37
+    (``00 A4 04 0C`` suivi de l'AID, sans reponse attendue).
+
+    Args:
+        application_identifier: Identifiant d'application (1 a 16 octets).
+
+    Returns:
+        La commande correspondante.
+
+    Raises:
+        ValueError: L'identifiant est vide ou trop long.
+    """
+    if not 1 <= len(application_identifier) <= 16:
+        raise ValueError("un identifiant d'application fait de 1 a 16 octets")
+    return APDUCommand(cla=CLA_ISO, ins=INS_SELECT, p1=0x04, p2=0x0C, data=application_identifier)
+
+
+def perform_hash_of_file() -> APDUCommand:
+    """Construit la commande PERFORM HASH OF FILE.
+
+    Calcule, dans la carte, l'empreinte du fichier elementaire courant ; elle est
+    conservee par la carte pour la commande :func:`compute_digital_signature`.
+
+    Source : reglement (UE) 2016/799, annexe I C, appendice 2, TCS_124
+    (``80 2A 90 00``, commande proprietaire sans donnees).
+    """
+    return APDUCommand(cla=CLA_PROPRIETARY, ins=INS_PERFORM_SECURITY_OPERATION, p1=0x90, p2=0x00)
+
+
+def compute_digital_signature(expected_length: int) -> APDUCommand:
+    """Construit la commande PSO: COMPUTE DIGITAL SIGNATURE.
+
+    La carte signe l'empreinte calculee par :func:`perform_hash_of_file` avec sa
+    cle privee, qu'elle ne divulgue jamais.
+
+    Source : reglement (UE) 2016/799, annexe I C, appendice 2, TCS_130
+    (``00 2A 9E 9A`` suivi de ``Le``).
+
+    Args:
+        expected_length: Longueur exacte de la signature attendue (1 a 256). Une
+            carte tachygraphique repond ``6700`` si elle ne correspond pas.
+    """
+    if not 1 <= expected_length <= 256:
+        raise ValueError("expected_length doit etre compris entre 1 et 256")
+    return APDUCommand(
+        cla=CLA_ISO,
+        ins=INS_PERFORM_SECURITY_OPERATION,
+        p1=0x9E,
+        p2=0x9A,
+        expected_length=expected_length,
+    )
 
 
 def select_file_by_identifier(file_identifier: bytes) -> APDUCommand:
-    """Construit une commande SELECT FILE par identifiant de fichier.
+    """Construit une commande SELECT d'un fichier elementaire du DF courant.
 
-    La **forme** de la commande est normalisee (ISO/IEC 7816-4). En revanche, les
-    identifiants de fichiers a selectionner sur une carte tachygraphique ne sont pas
-    fournis par ce module : voir ``CARD_FILE_IDENTIFIERS`` dans
-    :mod:`app.parser.specification`.
+    Source : reglement (UE) 2016/799, annexe I C, appendice 2, TCS_39
+    (``00 A4 02 0C`` suivi de l'identifiant, sans reponse attendue). Le fichier est
+    cherche sous le repertoire (DF) courant : le meme identifiant designe donc un
+    fichier different selon l'application tachygraphique selectionnee.
 
     Args:
         file_identifier: Identifiant de fichier sur 2 octets.
@@ -232,7 +293,7 @@ def select_file_by_identifier(file_identifier: bytes) -> APDUCommand:
     """
     if len(file_identifier) != 2:
         raise ValueError("un identifiant de fichier ISO 7816 fait 2 octets")
-    return APDUCommand(cla=CLA_ISO, ins=INS_SELECT, p1=0x00, p2=0x0C, data=file_identifier)
+    return APDUCommand(cla=CLA_ISO, ins=INS_SELECT, p1=0x02, p2=0x0C, data=file_identifier)
 
 
 def read_binary(*, offset: int, length: int) -> APDUCommand:

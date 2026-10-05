@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.database.models import Driver
-from app.database.repositories.base import BaseRepository
+from app.database.repositories.base import LIKE_ESCAPE, BaseRepository, like_pattern
 
 __all__ = ["DriverRepository"]
 
@@ -46,15 +46,20 @@ class DriverRepository(BaseRepository[Driver]):
         Returns:
             Les conducteurs correspondants.
         """
-        pattern = f"%{term.strip()}%"
+        pattern = like_pattern(term)
         statement = (
             select(Driver)
             .where(
-                Driver.card_number.ilike(pattern)
-                | Driver.last_name.ilike(pattern)
-                | Driver.first_name.ilike(pattern)
+                Driver.card_number.ilike(pattern, escape=LIKE_ESCAPE)
+                | Driver.last_name.ilike(pattern, escape=LIKE_ESCAPE)
+                | Driver.first_name.ilike(pattern, escape=LIKE_ESCAPE)
             )
-            .order_by(Driver.last_name, Driver.first_name)
+            .order_by(
+                Driver.last_name.is_(None),
+                Driver.last_name,
+                Driver.first_name,
+                Driver.card_number,
+            )
             .limit(limit)
         )
         return list(self._session.scalars(statement).all())

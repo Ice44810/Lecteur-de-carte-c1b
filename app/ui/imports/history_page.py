@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (
 from app.bootstrap import ApplicationContext
 from app.core.enums import FileType, ParsingStatus
 from app.services.import_service import ImportRecord, ImportService
-from app.ui.common.errors import show_information
+from app.ui.common.errors import show_error, show_information
+from app.ui.common.formatting import format_local_datetime
 from app.ui.common.page import Page
 from app.ui.common.widgets import ReadOnlyTable
 
@@ -40,8 +41,9 @@ class ImportHistoryPage(Page):
     )
 
     def __init__(self, context: ApplicationContext, parent: QWidget | None = None) -> None:
-        self._service = ImportService(context.database)
+        self._service = ImportService(context.database, settings=context.settings)
         self._records: tuple[ImportRecord, ...] = ()
+        self._timezone = context.settings.timezone_display
         super().__init__(context, parent)
 
     def build(self) -> None:
@@ -88,6 +90,15 @@ class ImportHistoryPage(Page):
         self._details_button.clicked.connect(self._on_details)
         actions.addWidget(self._details_button)
 
+        self._redecode_button = QPushButton("Decoder a nouveau")
+        self._redecode_button.setEnabled(False)
+        self._redecode_button.clicked.connect(self._on_redecode)
+        actions.addWidget(self._redecode_button)
+
+        pending_button = QPushButton("Decoder les fichiers en attente")
+        pending_button.clicked.connect(self._on_redecode_pending)
+        actions.addWidget(pending_button)
+
         self._open_folder_button = QPushButton("Ouvrir le dossier d'archivage")
         self._open_folder_button.setEnabled(False)
         self._open_folder_button.clicked.connect(self._on_open_folder)
@@ -104,7 +115,7 @@ class ImportHistoryPage(Page):
         self._table.set_rows(
             tuple(
                 (
-                    record.imported_at.strftime("%d/%m/%Y %H:%M"),
+                    format_local_datetime(record.imported_at, self._timezone),
                     record.driver_display_name or "-",
                     record.file_type.value,
                     record.filename,
@@ -113,24 +124,26 @@ class ImportHistoryPage(Page):
                     record.parsing_status.label,
                 )
                 for record in self._records
-            )
+            ),
+            keys=tuple(record.id for record in self._records),
         )
         self._details_button.setEnabled(False)
+        self._redecode_button.setEnabled(False)
         self._open_folder_button.setEnabled(False)
         self.notify(f"{len(self._records)} import(s) affiche(s)")
 
     def _selected_record(self) -> ImportRecord | None:
         """Retourne l'import selectionne, ou ``None``."""
-        rows = {index.row() for index in self._table.selectedIndexes()}
-        if len(rows) != 1:
+        record_id = self._table.selected_key()
+        if record_id is None:
             return None
-        row = rows.pop()
-        return self._records[row] if 0 <= row < len(self._records) else None
+        return next((record for record in self._records if record.id == record_id), None)
 
     def _on_selection_changed(self) -> None:
         """Active ou desactive les actions selon la selection."""
         has_selection = self._selected_record() is not None
         self._details_button.setEnabled(has_selection)
+        self._redecode_button.setEnabled(has_selection)
         self._open_folder_button.setEnabled(has_selection)
 
     def _on_details(self) -> None:
@@ -141,7 +154,9 @@ class ImportHistoryPage(Page):
         lines = [
             f"Fichier : {record.filename}",
             f"Type : {record.file_type.label}",
-            f"Importe le : {record.imported_at.strftime('%d/%m/%Y a %H:%M')} (UTC)",
+            "Importe le : "
+            + format_local_datetime(record.imported_at, self._timezone, pattern="%d/%m/%Y a %H:%M")
+            + f" ({self._timezone})",
             f"Taille : {record.human_size} ({record.file_size} octets)",
             f"Empreinte SHA-256 : {record.sha256}",
             f"Statut de decodage : {record.parsing_status.label}",
@@ -150,6 +165,39 @@ class ImportHistoryPage(Page):
         if record.parsing_error:
             lines.append(f"Detail du decodage : {record.parsing_error}")
         show_information(self, "\n".join(lines), title="Detail de l'import")
+
+    def _on_redecode(self) -> None:
+        """Decode a nouveau le fichier selectionne depuis sa copie archivee."""
+        record = self._selected_record()
+        if record is None:
+            return
+        try:
+            updated = self._service.redecode(record.id)
+        except Exception as exc:  # noqa: BLE001 - garde-fou d'interface
+            show_error(self, exc, title="Decodage du fichier")
+            return
+        self.safe_refresh()
+        show_information(
+            self,
+            f"{updated.filename} : {updated.parsing_status.label}.\n\n"
+            + (updated.parsing_error or ""),
+            title="Decodage du fichier",
+        )
+
+    def _on_redecode_pending(self) -> None:
+        """Decode les fichiers archives qui ne l'ont pas encore ete."""
+        try:
+            updated = self._service.redecode_pending()
+        except Exception as exc:  # noqa: BLE001 - garde-fou d'interface
+            show_error(self, exc, title="Decodage des fichiers")
+            return
+        self.safe_refresh()
+        decoded = sum(1 for item in updated if item.driver_display_name)
+        show_information(
+            self,
+            f"{len(updated)} fichier(s) examine(s), {decoded} rattache(s) a un conducteur.",
+            title="Decodage des fichiers",
+        )
 
     def _on_open_folder(self) -> None:
         """Ouvre le repertoire contenant la copie archivee."""

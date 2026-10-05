@@ -91,3 +91,8 @@ def test_get_settings_est_mis_en_cache() -> None:
     assert get_settings() is get_settings()
 
     reset_settings_cache()
+
+
+def test_un_fuseau_d_affichage_inconnu_est_refuse(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="fuseau"):
+        Settings(data_dir=tmp_path, timezone_display="Mars/Olympus")

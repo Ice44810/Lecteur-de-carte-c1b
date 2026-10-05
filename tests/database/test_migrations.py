@@ -25,7 +25,7 @@ def test_upgrade_cree_toutes_les_tables_attendues(database: Database) -> None:
 
     applied = runner.upgrade()
 
-    assert [migration.version for migration in applied] == [1]
+    assert [migration.version for migration in applied] == [1, 2]
     tables = set(inspect(database.engine).get_table_names())
     assert set(EXPECTED_TABLES) <= tables
     assert SCHEMA_MIGRATIONS_TABLE in tables
@@ -115,3 +115,24 @@ def test_bootstrap_sans_migration_automatique_ne_modifie_pas_la_base(settings: S
         assert context.applied_migrations == ()
     finally:
         database.dispose()
+
+
+def test_la_migration_0002_complete_une_base_en_version_1(database: Database) -> None:
+    """Une base creee par la version precedente recoit les nouvelles colonnes."""
+    from sqlalchemy import text
+
+    from app.database.migrations import m0001, m0002
+    from app.database.migrations.runner import MigrationRunner
+
+    MigrationRunner(database.engine, (m0001,)).upgrade()
+    with database.engine.begin() as connexion:
+        connexion.execute(text("ALTER TABLE activities DROP COLUMN card_inserted"))
+        connexion.execute(text("DROP INDEX ix_tachograph_files_content_sha256"))
+        connexion.execute(text("ALTER TABLE tachograph_files DROP COLUMN content_sha256"))
+
+    MigrationRunner(database.engine, (m0001, m0002)).upgrade()
+
+    colonnes = {item["name"] for item in inspect(database.engine).get_columns("activities")}
+    assert {"card_inserted", "manual_entry", "crew"} <= colonnes
+    colonnes = {item["name"] for item in inspect(database.engine).get_columns("tachograph_files")}
+    assert "content_sha256" in colonnes

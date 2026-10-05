@@ -31,8 +31,11 @@ from app.parser.models import (
     DecodedActivityPeriod,
     DecodedDriverIdentification,
     DecodedEvent,
+    DecodedPlace,
+    DecodedSpecificCondition,
     DecodedTechnicalData,
     DecodedVehicleIdentification,
+    DecodedVehicleUse,
     DiagnosticLevel,
     ParseDiagnostic,
     ParseResult,
@@ -124,13 +127,13 @@ class TachographFileParser(ABC):
         """Indique si le decodage complet est disponible dans cette version.
 
         Retourne ``False`` tant qu'une question bloquante du registre
-        d'incertitudes n'est pas confirmee. L'interface s'appuie sur cette
-        propriete pour expliquer clairement a l'utilisateur pourquoi un fichier est
-        archive sans etre decode.
+        d'incertitudes est encore a l'etat ``OPEN`` (sans reference officielle).
+        L'interface s'appuie sur cette propriete pour expliquer clairement a
+        l'utilisateur pourquoi un fichier est archive sans etre decode.
         """
-        from app.parser.specification import is_confirmed
+        from app.parser.specification import is_referenced
 
-        return is_confirmed(self.specification_topic)
+        return is_referenced(self.specification_topic)
 
     @property
     def blocking_questions(self) -> tuple[OpenQuestion, ...]:
@@ -230,6 +233,18 @@ class TachographFileParser(ABC):
             UnconfirmedStructureError: La structure n'est pas encore confirmee.
         """
 
+    def extract_vehicles_used(self) -> tuple[DecodedVehicleUse, ...]:
+        """Extrait les periodes d'utilisation de vehicules. Par defaut, aucune."""
+        return ()
+
+    def extract_places(self) -> tuple[DecodedPlace, ...]:
+        """Extrait les lieux de debut et de fin de periode de travail. Par defaut, aucun."""
+        return ()
+
+    def extract_specific_conditions(self) -> tuple[DecodedSpecificCondition, ...]:
+        """Extrait les conditions particulieres. Par defaut, aucune."""
+        return ()
+
     # ------------------------------------------------------------------ #
     # Orchestration
     # ------------------------------------------------------------------ #
@@ -256,6 +271,13 @@ class TachographFileParser(ABC):
         technical, diagnostics_technical = self._attempt(
             "technical_data", self.extract_technical_data
         )
+        vehicles_used, diagnostics_vehicles_used = self._attempt(
+            "vehicles_used", self.extract_vehicles_used
+        )
+        places, diagnostics_places = self._attempt("places", self.extract_places)
+        conditions, diagnostics_conditions = self._attempt(
+            "specific_conditions", self.extract_specific_conditions
+        )
 
         diagnostics.extend(
             diagnostics_driver
@@ -263,6 +285,9 @@ class TachographFileParser(ABC):
             + diagnostics_activities
             + diagnostics_events
             + diagnostics_technical
+            + diagnostics_vehicles_used
+            + diagnostics_places
+            + diagnostics_conditions
         )
 
         result = ParseResult(
@@ -271,6 +296,9 @@ class TachographFileParser(ABC):
             vehicle=vehicle,
             activities=tuple(activities or ()),
             events=tuple(events or ()),
+            vehicles_used=tuple(vehicles_used or ()),
+            places=tuple(places or ()),
+            specific_conditions=tuple(conditions or ()),
             technical_data=technical,
             diagnostics=tuple(diagnostics),
             is_complete=not any(

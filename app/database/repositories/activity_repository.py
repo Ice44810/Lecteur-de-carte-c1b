@@ -80,6 +80,49 @@ class ActivityRepository(BaseRepository[Activity]):
             self._session.scalars(statement.order_by(Activity.start_datetime, Activity.id)).all()
         )
 
+    def list_overlapping(
+        self,
+        *,
+        period_start: datetime,
+        period_end: datetime,
+        activity_types: tuple[ActivityType, ...] | None = None,
+    ) -> list[Activity]:
+        """Retourne les activites de tous les conducteurs chevauchant une periode.
+
+        Les activites a cheval sur les bornes sont incluses : c'est a l'appelant de
+        les borner a la periode (``app.analysis.activities.clip_to_period``).
+
+        Args:
+            period_start: Debut de la periode (inclus).
+            period_end: Fin de la periode (exclu).
+            activity_types: Restreint a certains types d'activite.
+
+        Returns:
+            Les activites, triees par conducteur puis chronologiquement.
+        """
+        statement = select(Activity).where(
+            Activity.end_datetime > period_start,
+            Activity.start_datetime < period_end,
+        )
+        if activity_types:
+            statement = statement.where(Activity.activity_type.in_(activity_types))
+        statement = statement.order_by(Activity.driver_id, Activity.start_datetime, Activity.id)
+        return list(self._session.scalars(statement).all())
+
+    def count_for_driver(self, driver_id: int) -> int:
+        """Retourne le nombre d'activites enregistrees pour un conducteur."""
+        statement = (
+            select(func.count()).select_from(Activity).where(Activity.driver_id == driver_id)
+        )
+        return int(self._session.scalar(statement) or 0)
+
+    def count_for_vehicle(self, vehicle_id: int) -> int:
+        """Retourne le nombre d'activites rattachees a un vehicule."""
+        statement = (
+            select(func.count()).select_from(Activity).where(Activity.vehicle_id == vehicle_id)
+        )
+        return int(self._session.scalar(statement) or 0)
+
     def list_for_file(self, source_file_id: int) -> list[Activity]:
         """Retourne les activites extraites d'un fichier donne (tracabilite)."""
         statement = (
@@ -135,6 +178,11 @@ class ActivityRepository(BaseRepository[Activity]):
         driver_id: int | None = None,
     ) -> int:
         """Retourne la duree totale d'un type d'activite sur une periode.
+
+        Comme :meth:`duration_by_type`, seules les activites **entierement contenues**
+        dans la periode sont comptees. Pour un total exact incluant les activites a
+        cheval sur les bornes, utiliser :meth:`list_overlapping` puis le moteur
+        d'analyse.
 
         Args:
             activity_type: Type d'activite agrege.

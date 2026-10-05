@@ -141,9 +141,21 @@ class PCSCReader(CardReaderInterface):
 
         target = self._select_reader(readers)
         if target is None:
-            return CardPresence(status=CardStatus.NO_READER, detail=cause)
+            detail = (
+                f"Le lecteur « {self._reader_name} » n'est pas connecte."
+                if readers and self._reader_name is not None
+                else cause
+            )
+            return CardPresence(status=CardStatus.NO_READER, detail=detail)
 
-        atr = self._read_atr(target)
+        try:
+            atr = self._read_atr(target)
+        except PCSCUnavailableError as exc:
+            # Service arrete entre la liste des lecteurs et la lecture de l'ATR.
+            return CardPresence(status=CardStatus.PCSC_UNAVAILABLE, detail=exc.technical_detail)
+        except NoReaderFoundError as exc:
+            # Lecteur debranche entre la liste des lecteurs et la lecture de l'ATR.
+            return CardPresence(status=CardStatus.NO_READER, detail=exc.technical_detail)
         if atr is None:
             return CardPresence(status=CardStatus.NO_CARD, reader=target)
         status = CardStatus.CARD_CONNECTED if self.is_connected else CardStatus.CARD_PRESENT

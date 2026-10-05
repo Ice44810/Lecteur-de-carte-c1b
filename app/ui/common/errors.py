@@ -15,6 +15,7 @@ Le detail technique est journalise et reste consultable dans la boite de dialogu
 
 from __future__ import annotations
 
+from pydantic import ValidationError
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from app.config.logging_config import get_logger
@@ -39,6 +40,18 @@ def format_error(error: Exception) -> tuple[str, str, str, str | None]:
     if isinstance(error, TachyError):
         message, cause, action = error.user_report()
         return message, cause, action, error.technical_detail
+    if isinstance(error, ValidationError):
+        fields = ", ".join(
+            "TACHY_" + str(item["loc"][0]).upper() for item in error.errors() if item.get("loc")
+        )
+        return (
+            "La configuration de l'application est invalide.",
+            "Un parametre de configuration a une valeur incorrecte"
+            + (f" : {fields}." if fields else "."),
+            "Corrigez la variable d'environnement ou le fichier .env concerne, puis "
+            "relancez l'application.",
+            str(error),
+        )
     if isinstance(error, NotImplementedError):
         return (
             "Cette fonctionnalite n'est pas encore disponible.",

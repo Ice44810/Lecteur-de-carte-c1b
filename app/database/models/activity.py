@@ -70,6 +70,13 @@ class Activity(Base):
     duration_seconds: Mapped[int] = mapped_column(
         nullable=False, doc="Duree de la periode en secondes."
     )
+    card_inserted: Mapped[bool | None] = mapped_column(
+        doc="La carte etait inseree dans un appareil ; sinon saisie manuelle ou inconnue."
+    )
+    manual_entry: Mapped[bool | None] = mapped_column(
+        doc="Activite saisie manuellement par le conducteur, carte retiree."
+    )
+    crew: Mapped[bool | None] = mapped_column(doc="Conduite en equipage (sinon seul).")
 
     driver: Mapped[Driver] = relationship(back_populates="activities")
     vehicle: Mapped[Vehicle | None] = relationship(back_populates="activities")
@@ -86,6 +93,9 @@ class Activity(Base):
         end_datetime: datetime,
         vehicle_id: int | None = None,
         source_file_id: int | None = None,
+        card_inserted: bool | None = None,
+        manual_entry: bool | None = None,
+        crew: bool | None = None,
     ) -> Activity:
         """Cree une activite en calculant la duree depuis ses bornes.
 
@@ -99,6 +109,9 @@ class Activity(Base):
             end_datetime: Fin de la periode.
             vehicle_id: Identifiant du vehicule, si connu.
             source_file_id: Identifiant du fichier d'origine.
+            card_inserted: La carte etait inseree.
+            manual_entry: L'activite a ete saisie manuellement.
+            crew: Conduite en equipage.
 
         Returns:
             Une instance non encore persistee.
@@ -117,4 +130,7 @@ class Activity(Base):
             start_datetime=start_datetime,
             end_datetime=end_datetime,
             duration_seconds=duration,
+            card_inserted=card_inserted,
+            manual_entry=manual_entry,
+            crew=crew,
         )

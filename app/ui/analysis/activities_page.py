@@ -47,7 +47,7 @@ class ActivitiesPage(Page):
 
     def __init__(self, context: ApplicationContext, parent: QWidget | None = None) -> None:
         self._drivers = DriverService(context.database)
-        self._analysis = AnalysisService(context.database)
+        self._analysis = AnalysisService(context.database, ruleset=context.ruleset)
         self._driver_list: tuple[DriverSummary, ...] = ()
         super().__init__(context, parent)
 
@@ -95,7 +95,7 @@ class ActivitiesPage(Page):
         filters.addStretch(1)
         self.content_layout.addLayout(filters)
 
-        self._table = ReadOnlyTable(("Jour", "Plage horaire", "Activite", "Duree"))
+        self._table = ReadOnlyTable(("Jour (UTC)", "Plage horaire (UTC)", "Activite", "Duree"))
         self.content_layout.addWidget(self._table)
 
         self._totals_box = QGroupBox("Totaux de la periode")
@@ -119,16 +119,12 @@ class ActivitiesPage(Page):
         period_start, period_end = self._current_period()
         selected_type = self._type_filter.currentData()
 
-        entries = []
-        cursor = period_start
-        while cursor < period_end:
-            day_entries = self._analysis.daily_timeline(
-                driver_id,
-                cursor.date(),
-                activity_types=(selected_type,) if selected_type is not None else None,
-            )
-            entries.extend(day_entries)
-            cursor += timedelta(days=1)
+        entries = self._analysis.period_timeline(
+            driver_id,
+            period_start=period_start,
+            period_end=period_end,
+            activity_types=(selected_type,) if selected_type is not None else None,
+        )
 
         self._table.set_rows(
             tuple(

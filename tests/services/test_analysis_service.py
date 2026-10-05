@@ -294,3 +294,52 @@ def test_une_analyse_sans_evaluation_reste_exploitable() -> None:
 
     assert analyse.alerts_count == 0
     assert analyse.summary_message() == "Analyse des temps terminee."
+
+
+# --------------------------------------------------------------------------- #
+# Frise sur une periode et alertes enregistrees
+# --------------------------------------------------------------------------- #
+def test_la_frise_d_une_periode_reunit_les_frises_journalieres(
+    service: AnalysisService, driver, add_activity
+) -> None:
+    add_activity(ActivityType.DRIVING, JOUR + timedelta(hours=8), JOUR + timedelta(hours=9))
+    add_activity(ActivityType.REST, JOUR + timedelta(hours=22), LENDEMAIN + timedelta(hours=6))
+    add_activity(ActivityType.WORK, LENDEMAIN + timedelta(hours=7), LENDEMAIN + timedelta(hours=8))
+
+    periode = service.period_timeline(
+        driver.id, period_start=JOUR, period_end=LENDEMAIN + timedelta(days=1)
+    )
+
+    attendu = service.daily_timeline(driver.id, JOUR.date()) + service.daily_timeline(
+        driver.id, LENDEMAIN.date()
+    )
+    assert periode == attendu
+
+
+def test_les_alertes_enregistrees_sont_restituees_sans_objet_orm(
+    service: AnalysisService, driver, migrated_database: Database
+) -> None:
+    from app.core.enums import RuleStatus, Severity
+    from app.database.models import Infringement
+
+    with migrated_database.session() as session:
+        session.add(
+            Infringement(
+                driver_id=driver.id,
+                occurred_on=JOUR.date(),
+                rule_code="DAILY_DRIVING_MAX",
+                status=RuleStatus.VIOLATION,
+                severity=Severity.HIGH,
+                description="Depassement apparent",
+                measured_value=10 * 3600,
+                allowed_value=9 * 3600,
+                unit="seconds",
+            )
+        )
+
+    alertes = service.recent_alerts()
+
+    assert len(alertes) == 1
+    assert alertes[0].driver_display_name == "DURAND Camille"
+    assert alertes[0].measured_label == "10h00"
+    assert alertes[0].allowed_label == "09h00"

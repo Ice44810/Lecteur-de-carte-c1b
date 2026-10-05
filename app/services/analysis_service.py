@@ -22,6 +22,7 @@ from app.analysis.activities import (
     find_gaps,
     merge_adjacent,
     normalize_intervals,
+    split_by_day,
     to_intervals,
 )
 from app.analysis.availability import calculate_availability_time
@@ -32,12 +33,12 @@ from app.analysis.rest_time import calculate_total_rest
 from app.analysis.rules import RuleContext, RuleRegistry, RuleSet, default_registry, empty_ruleset
 from app.analysis.working_time import calculate_working_time
 from app.config.logging_config import get_logger
-from app.core.enums import ActivityType
+from app.core.enums import ActivityType, RuleStatus, Severity
 from app.core.timeutils import day_bounds, format_duration, week_bounds
-from app.database.repositories import ActivityRepository
+from app.database.repositories import ActivityRepository, InfringementRepository
 from app.services.base import BaseService
 
-__all__ = ["AnalysisService", "TimelineEntry", "PeriodAnalysis"]
+__all__ = ["AnalysisService", "AlertRecord", "TimelineEntry", "PeriodAnalysis"]
 
 logger = get_logger(__name__)
 
@@ -76,6 +77,53 @@ class TimelineEntry:
     def duration_label(self) -> str:
         """Duree formatee en ``HHhMM``."""
         return format_duration(self.duration_seconds)
+
+
+@dataclass(frozen=True, slots=True)
+class AlertRecord:
+    """Situation a verifier enregistree, prete a etre affichee.
+
+    Attributes:
+        occurred_on: Jour de service concerne.
+        driver_display_name: Conducteur concerne.
+        rule_code: Code de la regle evaluee.
+        status: Resultat de la regle.
+        severity: Criticite interne.
+        description: Description prudente de la situation.
+        measured_value: Valeur mesuree.
+        allowed_value: Seuil applique.
+        unit: Unite des deux valeurs.
+        regulation_reference: Source du seuil applique.
+    """
+
+    occurred_on: date
+    driver_display_name: str
+    rule_code: str
+    status: RuleStatus
+    severity: Severity
+    description: str
+    measured_value: float | None
+    allowed_value: float | None
+    unit: str
+    regulation_reference: str | None
+
+    @property
+    def measured_label(self) -> str:
+        """Valeur mesuree formatee selon son unite."""
+        return self._format(self.measured_value)
+
+    @property
+    def allowed_label(self) -> str:
+        """Seuil formate selon son unite."""
+        return self._format(self.allowed_value)
+
+    def _format(self, value: float | None) -> str:
+        """Formate une valeur en tenant compte de l'unite."""
+        if value is None:
+            return "-"
+        if self.unit == "seconds":
+            return format_duration(int(value))
+        return f"{value:g} {self.unit}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,7 +257,65 @@ class AnalysisService(BaseService):
             Les lignes de la frise, dans l'ordre chronologique.
         """
         start, end = day_bounds(datetime(day.year, day.month, day.day, tzinfo=UTC))
-        intervals = self.load_intervals(driver_id, period_start=start, period_end=end)
+        return self.period_timeline(
+            driver_id,
+            period_start=start,
+            period_end=end,
+            activity_types=activity_types,
+            include_gaps=include_gaps,
+            merge_contiguous=merge_contiguous,
+        )
+
+    def period_timeline(
+        self,
+        driver_id: int,
+        *,
+        period_start: datetime,
+        period_end: datetime,
+        activity_types: tuple[ActivityType, ...] | None = None,
+        include_gaps: bool = True,
+        merge_contiguous: bool = True,
+    ) -> tuple[TimelineEntry, ...]:
+        """Retourne la frise d'activites d'une periode, journee par journee.
+
+        Les activites sont lues en une seule fois, puis decoupees par journee
+        calendaire UTC : chaque ligne appartient a une seule journee, et les periodes
+        sans enregistrement sont recherchees a l'interieur de chaque journee.
+
+        Args:
+            driver_id: Conducteur concerne.
+            period_start: Debut de la periode (inclus).
+            period_end: Fin de la periode (exclu).
+            activity_types: Filtre optionnel sur les types d'activite.
+            include_gaps: Insere une ligne explicite pour chaque periode sans
+                enregistrement, afin que l'absence de donnee soit visible.
+            merge_contiguous: Fusionne les enregistrements contigus de meme type.
+
+        Returns:
+            Les lignes de la frise, dans l'ordre chronologique.
+        """
+        intervals = self.load_intervals(driver_id, period_start=period_start, period_end=period_end)
+        entries: list[TimelineEntry] = []
+        for day_intervals in split_by_day(intervals).values():
+            entries.extend(
+                self._timeline_entries(
+                    day_intervals,
+                    activity_types=activity_types,
+                    include_gaps=include_gaps,
+                    merge_contiguous=merge_contiguous,
+                )
+            )
+        return tuple(sorted(entries, key=lambda entry: (entry.start, entry.end)))
+
+    @staticmethod
+    def _timeline_entries(
+        intervals: tuple[ActivityInterval, ...],
+        *,
+        activity_types: tuple[ActivityType, ...] | None,
+        include_gaps: bool,
+        merge_contiguous: bool,
+    ) -> list[TimelineEntry]:
+        """Construit les lignes de frise d'une journee."""
         if merge_contiguous:
             intervals = merge_adjacent(intervals)
 
@@ -236,8 +342,7 @@ class AnalysisService(BaseService):
                         is_gap=True,
                     )
                 )
-
-        return tuple(sorted(entries, key=lambda entry: (entry.start, entry.end)))
+        return entries
 
     # ------------------------------------------------------------------ #
     # Analyse d'une periode
@@ -310,6 +415,35 @@ class AnalysisService(BaseService):
         """Analyse la semaine (du lundi) contenant ``moment``."""
         start, end = week_bounds(moment)
         return self.analyze_period(driver_id, period_start=start, period_end=end)
+
+    # ------------------------------------------------------------------ #
+    # Alertes enregistrees
+    # ------------------------------------------------------------------ #
+    def recent_alerts(self, *, limit: int = 200) -> tuple[AlertRecord, ...]:
+        """Retourne les dernieres situations a verifier enregistrees.
+
+        Args:
+            limit: Nombre maximal de lignes.
+
+        Returns:
+            Les alertes, de la plus recente a la plus ancienne.
+        """
+        with self._session() as session:
+            return tuple(
+                AlertRecord(
+                    occurred_on=item.occurred_on,
+                    driver_display_name=item.driver.display_name,
+                    rule_code=item.rule_code,
+                    status=item.status,
+                    severity=item.severity,
+                    description=item.description,
+                    measured_value=item.measured_value,
+                    allowed_value=item.allowed_value,
+                    unit=item.unit,
+                    regulation_reference=item.regulation_reference,
+                )
+                for item in InfringementRepository(session).list_recent(limit=limit)
+            )
 
     # ------------------------------------------------------------------ #
     # Ecriture (phase 6)

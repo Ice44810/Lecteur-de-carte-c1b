@@ -52,6 +52,25 @@ class Driver(TimestampMixin, Base):
         Date, doc="Date d'expiration de la carte."
     )
 
+    card_validity_begin: Mapped[date | None] = mapped_column(
+        Date, doc="Debut de validite de la carte."
+    )
+    card_issuing_authority: Mapped[str | None] = mapped_column(
+        String(64), doc="Autorite ayant delivre la carte."
+    )
+    preferred_language: Mapped[str | None] = mapped_column(
+        String(2), doc="Langue preferee du titulaire (ISO 639)."
+    )
+    licence_number: Mapped[str | None] = mapped_column(
+        String(16), doc="Numero du permis de conduire."
+    )
+    licence_issuing_authority: Mapped[str | None] = mapped_column(
+        String(64), doc="Autorite ayant delivre le permis de conduire."
+    )
+    licence_issuing_country: Mapped[str | None] = mapped_column(
+        String(3), doc="Pays de delivrance du permis de conduire."
+    )
+
     notes: Mapped[str | None] = mapped_column(String(500), doc="Commentaire libre de l'exploitant.")
 
     activities: Mapped[list[Activity]] = relationship(

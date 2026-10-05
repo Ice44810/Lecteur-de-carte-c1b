@@ -108,5 +108,5 @@ class VehiclesPage(Page):
         self._registration.clear()
         self._country.clear()
         self._vin.clear()
-        self.notify(f"Vehicule enregistre : {summary.display_name}")
+        self.notify(f"Fiche vehicule enregistree : {summary.display_name}")
         self.safe_refresh()

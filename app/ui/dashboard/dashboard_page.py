@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QGridLayout, QGroupBox, QVBoxLayout, QWidget
 
 from app.bootstrap import ApplicationContext
 from app.services.dashboard_service import DashboardService
+from app.ui.common.formatting import format_local_datetime
 from app.ui.common.page import Page
 from app.ui.common.widgets import IndicatorCard, NoticeBanner, ReadOnlyTable
 
@@ -24,7 +25,7 @@ class DashboardPage(Page):
     subtitle = "Synthese de l'activite tachygraphique de l'entreprise."
 
     def __init__(self, context: ApplicationContext, parent: QWidget | None = None) -> None:
-        self._service = DashboardService(context.database)
+        self._service = DashboardService(context.database, ruleset=context.ruleset)
         super().__init__(context, parent)
 
     def build(self) -> None:
@@ -37,7 +38,7 @@ class DashboardPage(Page):
         indicators.setSpacing(12)
 
         self._drivers_card = IndicatorCard("Conducteurs suivis")
-        self._files_card = IndicatorCard("Cartes importees")
+        self._files_card = IndicatorCard("Fichiers importes")
         self._alerts_card = IndicatorCard("Situations a verifier")
         self._last_download_card = IndicatorCard("Dernier telechargement")
         self._driving_card = IndicatorCard("Conduite (semaine)")
@@ -53,7 +54,7 @@ class DashboardPage(Page):
         self.content_layout.addLayout(indicators)
 
         self._activity_table = ReadOnlyTable(
-            ("Conducteur", "Journee", "Plage de service", "Conduite")
+            ("Conducteur", "Journee (UTC)", "Plage de service (UTC)", "Conduite")
         )
         self._activity_table.setMinimumHeight(140)
         self.content_layout.addWidget(self._wrap("Activite recente", self._activity_table))
@@ -87,7 +88,14 @@ class DashboardPage(Page):
             if data.open_alerts_count
             else "Aucune verification en attente",
         )
-        self._last_download_card.set_value(data.last_import_label)
+        self._last_download_card.set_value(
+            format_local_datetime(data.last_import_at, self.context.settings.timezone_display)
+            if data.last_import_at is not None
+            else data.last_import_label,
+            f"Heure locale ({self.context.settings.timezone_display})"
+            if data.last_import_at is not None
+            else "",
+        )
         self._driving_card.set_value(data.week_driving_label, "Semaine en cours (lundi a lundi)")
         self._rest_card.set_value(data.week_rest_label, "Semaine en cours (lundi a lundi)")
 

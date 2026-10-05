@@ -32,6 +32,9 @@ __all__ = [
     "DecodedActivityPeriod",
     "DecodedEvent",
     "DecodedTechnicalData",
+    "DecodedVehicleUse",
+    "DecodedPlace",
+    "DecodedSpecificCondition",
     "ParseResult",
 ]
 
@@ -118,6 +121,12 @@ class DecodedDriverIdentification(BaseModel):
     card_issuing_country: str | None = Field(default=None, max_length=3)
     card_issue_date: date | None = None
     card_expiry_date: date | None = None
+    card_validity_begin: date | None = None
+    card_issuing_authority: str | None = Field(default=None, max_length=64)
+    preferred_language: str | None = Field(default=None, max_length=2)
+    licence_number: str | None = Field(default=None, max_length=16)
+    licence_issuing_authority: str | None = Field(default=None, max_length=64)
+    licence_issuing_country: str | None = Field(default=None, max_length=3)
 
     @model_validator(mode="after")
     def _check_card_dates(self) -> DecodedDriverIdentification:
@@ -151,6 +160,10 @@ class DecodedActivityPeriod(BaseModel):
         end: Fin de la periode (UTC).
         vehicle_registration: Immatriculation associee, si connue.
         card_slot: Emplacement de carte (1 conducteur, 2 convoyeur), si connu.
+        card_inserted: La carte etait inseree dans un appareil (``False`` : activite
+            saisie manuellement ou inconnue).
+        manual_entry: L'activite a ete saisie manuellement, carte retiree.
+        crew: Conduite en equipage (``False`` : conducteur seul), carte inseree.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -160,6 +173,9 @@ class DecodedActivityPeriod(BaseModel):
     end: datetime
     vehicle_registration: str | None = Field(default=None, max_length=24)
     card_slot: int | None = Field(default=None, ge=1, le=2)
+    card_inserted: bool | None = None
+    manual_entry: bool | None = None
+    crew: bool | None = None
 
     @model_validator(mode="after")
     def _check_bounds(self) -> DecodedActivityPeriod:
@@ -191,6 +207,51 @@ class DecodedEvent(BaseModel):
     end: datetime | None = None
     vehicle_registration: str | None = Field(default=None, max_length=24)
     description: str | None = None
+    is_fault: bool = False
+
+
+class DecodedVehicleUse(BaseModel):
+    """Periode d'utilisation d'un vehicule enregistree sur la carte (CardVehicleRecord)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    first_use: datetime
+    last_use: datetime | None = None
+    registration: str = Field(min_length=1, max_length=24)
+    registration_country: str | None = Field(default=None, max_length=3)
+    odometer_begin: int | None = Field(default=None, ge=0)
+    odometer_end: int | None = Field(default=None, ge=0)
+
+    @property
+    def distance(self) -> int | None:
+        """Distance parcourue, en kilometres, si les deux releves sont coherents."""
+        if self.odometer_begin is None or self.odometer_end is None:
+            return None
+        if self.odometer_end < self.odometer_begin:
+            return None
+        return self.odometer_end - self.odometer_begin
+
+
+class DecodedPlace(BaseModel):
+    """Lieu de debut ou de fin de periode de travail journaliere (PlaceRecord)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entry_time: datetime
+    entry_type: int = Field(ge=0, le=255)
+    country: str | None = Field(default=None, max_length=3)
+    country_name: str | None = None
+    region: int | None = None
+    odometer: int | None = Field(default=None, ge=0)
+
+
+class DecodedSpecificCondition(BaseModel):
+    """Condition particuliere saisie (SpecificConditionRecord)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entry_time: datetime
+    condition_type: int = Field(ge=0, le=255)
 
 
 class DecodedTechnicalData(BaseModel):
@@ -223,6 +284,9 @@ class ParseResult(BaseModel):
     vehicle: DecodedVehicleIdentification | None = None
     activities: tuple[DecodedActivityPeriod, ...] = ()
     events: tuple[DecodedEvent, ...] = ()
+    vehicles_used: tuple[DecodedVehicleUse, ...] = ()
+    places: tuple[DecodedPlace, ...] = ()
+    specific_conditions: tuple[DecodedSpecificCondition, ...] = ()
     technical_data: DecodedTechnicalData | None = None
     diagnostics: tuple[ParseDiagnostic, ...] = ()
     raw_blocks: tuple[RawBlock, ...] = ()

@@ -15,6 +15,7 @@ import pytest
 
 from app.core.enums import ActivityType, FileType, ParsingStatus
 from app.database.database import Database
+from app.database.models import Driver
 from app.services.dashboard_service import DashboardData, DashboardService
 
 SEMAINE = datetime(2026, 9, 16, 12, tzinfo=UTC)  # mercredi
@@ -188,3 +189,47 @@ def test_aucune_alerte_n_est_produite_sans_regle(service: DashboardService, driv
 
 def test_l_instant_de_reference_est_conserve(service: DashboardService) -> None:
     assert service.load(reference=SEMAINE).generated_at == SEMAINE
+
+
+# --------------------------------------------------------------------------- #
+# Activites a cheval sur les bornes de la semaine
+# --------------------------------------------------------------------------- #
+def test_un_repos_commence_avant_lundi_compte_pour_sa_partie_dans_la_semaine(
+    service: DashboardService, add_activity
+) -> None:
+    """Un repos du dimanche 22h au lundi 6h apporte 6 heures a la semaine, pas zero."""
+    add_activity(ActivityType.REST, LUNDI - timedelta(hours=2), LUNDI + timedelta(hours=6))
+    add_activity(ActivityType.DRIVING, LUNDI + timedelta(hours=6), LUNDI + timedelta(hours=10))
+
+    donnees = service.load(reference=SEMAINE)
+
+    assert donnees.week_rest_seconds == 6 * 3600
+    assert donnees.week_driving_seconds == 4 * 3600
+
+
+def test_une_conduite_qui_deborde_sur_la_semaine_suivante_est_bornee(
+    service: DashboardService, add_activity
+) -> None:
+    dimanche_soir = LUNDI + timedelta(days=7) - timedelta(hours=1)
+    add_activity(ActivityType.DRIVING, dimanche_soir, dimanche_soir + timedelta(hours=3))
+
+    assert service.load(reference=SEMAINE).week_driving_seconds == 3600
+
+
+def test_les_totaux_cumulent_tous_les_conducteurs(
+    service: DashboardService, add_activity, migrated_database: Database
+) -> None:
+    with migrated_database.session() as session:
+        autre = Driver(card_number="TESTCARD0000009")
+        session.add(autre)
+        session.flush()
+        autre_id = autre.id
+    add_activity(ActivityType.DRIVING, LUNDI + timedelta(hours=8), LUNDI + timedelta(hours=10))
+    add_activity(
+        ActivityType.DRIVING,
+        LUNDI + timedelta(hours=8),
+        LUNDI + timedelta(hours=11),
+        driver_id=autre_id,
+    )
+
+    assert service.load(reference=SEMAINE).week_driving_seconds == 5 * 3600

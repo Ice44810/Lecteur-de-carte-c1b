@@ -8,7 +8,12 @@ import pytest
 
 from app.core.enums import ActivityType
 from app.database.database import Database
-from app.services.driver_service import DriverNotFoundError, DriverService, DriverSummary
+from app.services.driver_service import (
+    DriverConflictError,
+    DriverNotFoundError,
+    DriverService,
+    DriverSummary,
+)
 
 
 @pytest.fixture
@@ -127,6 +132,51 @@ def test_le_numero_de_carte_est_nettoye_des_espaces(service: DriverService) -> N
     fiche = service.create(card_number="  F1234567890123  ")
 
     assert fiche.card_number == "F1234567890123"
+
+
+def test_une_meme_carte_saisie_differemment_designe_la_meme_fiche(
+    service: DriverService,
+) -> None:
+    premiere = service.create(card_number="F1234567890123")
+    seconde = service.create(card_number="f 1234 5678 90123")
+
+    assert seconde.id == premiere.id
+    assert seconde.card_number == "F1234567890123"
+    assert service.count() == 1
+
+
+def test_une_saisie_contradictoire_est_refusee_sans_modifier_la_fiche(
+    service: DriverService,
+) -> None:
+    premiere = service.create(card_number="F1234567890123", last_name="MARTIN")
+
+    with pytest.raises(DriverConflictError) as erreur:
+        service.create(card_number="F1234567890123", last_name="DUPONT")
+
+    message, cause, action = erreur.value.user_report()
+    assert message and cause and action
+    assert service.get(premiere.id).last_name == "MARTIN"
+
+
+def test_une_seconde_saisie_complete_les_champs_vides(service: DriverService) -> None:
+    service.create(card_number="F1234567890123", last_name="MARTIN")
+
+    fiche = service.create(
+        card_number="F1234567890123",
+        last_name="Martin",
+        first_name="Alex",
+        card_expiry_date=date(2030, 6, 30),
+    )
+
+    assert fiche.last_name == "MARTIN"
+    assert fiche.first_name == "Alex"
+    assert fiche.card_expiry_date == date(2030, 6, 30)
+
+
+def test_une_recherche_avec_joker_n_est_pas_interpretee(service: DriverService, driver) -> None:
+    """Un ``_`` ou un ``%`` saisi ne doit pas retourner toute la liste."""
+    assert service.search("_") == ()
+    assert service.search("%") == ()
 
 
 def test_les_champs_vides_ne_sont_pas_enregistres_comme_chaines(

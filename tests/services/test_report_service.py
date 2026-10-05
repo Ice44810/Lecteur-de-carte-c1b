@@ -13,7 +13,10 @@ from pathlib import Path
 import pytest
 
 from app.config.settings import Settings
+from app.core.exceptions import ReportError
 from app.database.database import Database
+from app.services.driver_service import DriverService
+from app.services.import_service import ImportService
 from app.services.report_service import ReportFormat, ReportRequest, ReportService
 
 DEBUT = datetime(2026, 9, 1, tzinfo=UTC)
@@ -118,28 +121,79 @@ def test_le_nom_propose_n_ecrit_aucun_fichier(service: ReportService) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Production differee en phase 9
+# Production
 # --------------------------------------------------------------------------- #
-def test_la_production_echoue_explicitement(service: ReportService) -> None:
-    demande = ReportRequest(report_format=ReportFormat.PDF, period_start=DEBUT, period_end=FIN)
+@pytest.fixture
+def conducteur_importe(context, tmp_path: Path) -> int:
+    from tests.services.test_import_service import carte_synthetique
 
-    with pytest.raises(NotImplementedError, match="phase 9"):
-        service.generate(demande)
+    service = ImportService(context.database, settings=context.settings)
+    ligne = service.import_file(carte_synthetique(tmp_path))
+    fiche = DriverService(context.database).get_by_card_number("F123456789012301")
+    assert ligne.driver_display_name and fiche is not None
+    return fiche.id
 
 
-def test_aucun_fichier_partiel_n_est_laisse_derriere(
-    service: ReportService, tmp_path: Path
+@pytest.mark.parametrize("format_", list(ReportFormat))
+def test_un_rapport_conducteur_est_produit_dans_chaque_format(
+    service: ReportService, conducteur_importe: int, format_: ReportFormat
 ) -> None:
-    """Une fonctionnalite non livree ne doit pas creer de fichier vide trompeur."""
-    cible = tmp_path / "rapport-partiel.pdf"
-    demande = ReportRequest(
-        report_format=ReportFormat.PDF,
-        period_start=DEBUT,
-        period_end=FIN,
-        output_path=cible,
+    chemin = service.generate(
+        ReportRequest(
+            report_format=format_,
+            period_start=datetime(2025, 9, 1, tzinfo=UTC),
+            period_end=datetime(2025, 11, 1, tzinfo=UTC),
+            driver_ids=(conducteur_importe,),
+        )
     )
 
-    with pytest.raises(NotImplementedError):
+    assert chemin.is_file()
+    assert chemin.stat().st_size > 0
+    assert chemin.suffix == format_.extension
+
+
+def test_le_rapport_excel_comporte_une_feuille_par_rubrique(
+    service: ReportService, conducteur_importe: int
+) -> None:
+    from openpyxl import load_workbook
+
+    chemin = service.generate(
+        ReportRequest(
+            report_format=ReportFormat.EXCEL,
+            period_start=datetime(2025, 9, 1, tzinfo=UTC),
+            period_end=datetime(2025, 11, 1, tzinfo=UTC),
+            driver_ids=(conducteur_importe,),
+        )
+    )
+
+    classeur = load_workbook(chemin)
+    assert classeur.sheetnames == [
+        "Info carte de conducteur",
+        "Evenements",
+        "Periodes de travail journaliere",  # limite Excel : 31 caracteres
+        "Activites",
+        "Vehicules",
+        "Pays",
+    ]
+    assert "DUPONT MARIE" in classeur["Activites"]["A1"].value
+
+
+def test_un_rapport_entreprise_sans_donnee_est_refuse_explicitement(
+    service: ReportService,
+) -> None:
+    demande = ReportRequest(report_format=ReportFormat.EXCEL, period_start=DEBUT, period_end=FIN)
+
+    with pytest.raises(ReportError) as erreur:
         service.generate(demande)
 
-    assert not cible.exists()
+    assert "Aucune donnee" in erreur.value.message
+    assert not service.suggest_output_path(demande).exists()
+
+
+def test_une_periode_inversee_est_refusee() -> None:
+    with pytest.raises(ValueError, match="periode"):
+        ReportRequest(
+            report_format=ReportFormat.PDF,
+            period_start=datetime(2026, 9, 30, tzinfo=UTC),
+            period_end=datetime(2026, 9, 1, tzinfo=UTC),
+        )

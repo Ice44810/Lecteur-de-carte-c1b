@@ -141,12 +141,23 @@ def continuous_driving_blocks(
     """Regroupe la conduite en blocs separes par une interruption suffisante.
 
     Deux periodes de conduite appartiennent au meme bloc tant qu'elles ne sont pas
-    separees par une interruption (repos, travail, disponibilite, ou absence
-    d'enregistrement) d'au moins ``break_minimum_seconds``.
+    separees par une periode de **repos continue** d'au moins
+    ``break_minimum_seconds``.
+
+    Seul le repos enregistre interrompt un bloc :
+
+    * le travail et la disponibilite ne sont pas des pauses : le reglement (CE)
+      no 561/2006, article 4, point d), definit la pause comme une periode pendant
+      laquelle le conducteur ne conduit pas et n'effectue aucune autre tache ;
+    * une periode sans enregistrement n'est pas assimilee a du repos (voir
+      :mod:`app.analysis.rest_time`) : la compter comme une coupure serait une
+      hypothese favorable non verifiable, susceptible de masquer un depassement.
+      Elle interrompt en outre la continuite du repos qui l'entoure.
 
     ``break_minimum_seconds`` est un parametre obligatoire : la duree qui constitue
     une coupure valable est une question reglementaire, tranchee par le moteur de
-    regles et non par ce module de mesure.
+    regles et non par ce module de mesure. Le fractionnement eventuel de la pause
+    releve lui aussi du moteur de regles.
 
     Args:
         intervals: Intervalles d'activite normalises et tries.
@@ -163,20 +174,30 @@ def continuous_driving_blocks(
 
     ordered = sorted(intervals, key=lambda item: (item.start, item.end))
     blocks: list[list[ActivityInterval]] = []
-    interruption = 0
+    # Plus long repos continu observe depuis la derniere conduite, et repos en cours.
+    longest_rest = 0
+    current_rest = 0
+    previous_end: datetime | None = None
     for interval in ordered:
-        if interval.activity_type is not ActivityType.DRIVING:
-            interruption += interval.duration_seconds
+        if previous_end is not None and interval.start > previous_end:
+            # Trou sans enregistrement : il rompt la continuite du repos.
+            current_rest = 0
+        previous_end = interval.end if previous_end is None else max(previous_end, interval.end)
+
+        if interval.activity_type is ActivityType.REST:
+            current_rest += interval.duration_seconds
+            longest_rest = max(longest_rest, current_rest)
             continue
-        if blocks:
-            gap = int((interval.start - blocks[-1][-1].end).total_seconds())
-            # Un trou sans enregistrement compte aussi comme interruption.
-            interruption = max(interruption, gap)
-        if not blocks or interruption >= break_minimum_seconds:
+        if interval.activity_type is not ActivityType.DRIVING:
+            current_rest = 0
+            continue
+
+        if not blocks or longest_rest >= break_minimum_seconds:
             blocks.append([interval])
         else:
             blocks[-1].append(interval)
-        interruption = 0
+        longest_rest = 0
+        current_rest = 0
 
     return tuple(
         DrivingBlock(

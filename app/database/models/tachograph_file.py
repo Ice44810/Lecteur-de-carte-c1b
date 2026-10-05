@@ -58,6 +58,14 @@ class TachographFile(Base):
         index=True,
         doc="Empreinte SHA-256 du contenu, en hexadecimal minuscule.",
     )
+    content_sha256: Mapped[str | None] = mapped_column(
+        String(64),
+        index=True,
+        doc=(
+            "Empreinte du contenu hors signatures : deux telechargements d'une meme "
+            "carte ne different parfois que par leurs signatures."
+        ),
+    )
     original_path: Mapped[str] = mapped_column(
         String(1024),
         nullable=False,

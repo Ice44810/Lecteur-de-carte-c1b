@@ -149,3 +149,18 @@ def test_une_confirmation_refusee_par_defaut_retourne_faux(
     """La boite interceptee retourne « Ok » : aucune suppression ne peut etre confirmee."""
     assert confirm(None, "Supprimer cet import ?") is False
     assert dialogs.count == 1
+
+
+def test_une_configuration_invalide_designe_la_variable_a_corriger() -> None:
+    from pydantic import ValidationError
+
+    from app.config.settings import Settings
+
+    with pytest.raises(ValidationError) as erreur:
+        Settings(timezone_display="Mars/Olympus")
+
+    message, cause, action, detail = format_error(erreur.value)
+    assert message == "La configuration de l'application est invalide."
+    assert "TACHY_TIMEZONE_DISPLAY" in cause
+    assert ".env" in action
+    assert detail

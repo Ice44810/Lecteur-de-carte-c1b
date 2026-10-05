@@ -9,6 +9,8 @@ messages. Chaque page dialogue avec ses propres services.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -28,10 +30,13 @@ from PySide6.QtWidgets import (
 from app import __version__
 from app.bootstrap import ApplicationContext
 from app.config.logging_config import get_logger
-from app.ui.common.errors import show_error
+from app.ui.common.errors import show_error, show_information
 from app.ui.common.page import Page
 from app.ui.navigation import NAVIGATION, NavigationItem
 from app.ui.theme import STYLESHEET
+
+if TYPE_CHECKING:  # pragma: no cover - imports de typage uniquement
+    from app.ui.cards.card_watcher import CardWatcher
 
 __all__ = ["MainWindow"]
 
@@ -46,12 +51,21 @@ class MainWindow(QMainWindow):
 
     Args:
         context: Contexte applicatif issu de :func:`app.bootstrap.bootstrap`.
+        card_watcher: Surveillant du lecteur de carte, qui telecharge les cartes
+            inserees. Absent, aucune interrogation du lecteur n'a lieu en tache de fond.
         parent: Widget parent.
     """
 
-    def __init__(self, context: ApplicationContext, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        context: ApplicationContext,
+        *,
+        card_watcher: CardWatcher | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._context = context
+        self._card_watcher = card_watcher
         self._pages: dict[str, Page] = {}
         self._containers: dict[str, QWidget] = {}
         self._items: dict[str, NavigationItem] = {}
@@ -72,6 +86,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         self._build_status_bar()
+        if card_watcher is not None:
+            self._connect_card_watcher(card_watcher)
         self._select_first_page()
 
     # ------------------------------------------------------------------ #
@@ -147,6 +163,37 @@ class MainWindow(QMainWindow):
     def context(self) -> ApplicationContext:
         """Contexte applicatif partage."""
         return self._context
+
+    @property
+    def card_watcher(self) -> CardWatcher | None:
+        """Surveillant du lecteur de carte, s'il est actif."""
+        return self._card_watcher
+
+    # ------------------------------------------------------------------ #
+    # Lecteur de carte
+    # ------------------------------------------------------------------ #
+    def _connect_card_watcher(self, watcher: CardWatcher) -> None:
+        """Relie les evenements du lecteur a la barre d'etat et aux pages."""
+        watcher.event_message.connect(self.show_status)
+        watcher.download_finished.connect(self._on_card_downloaded)
+        watcher.download_failed.connect(self._on_card_download_failed)
+
+    def _on_card_downloaded(self, result: object) -> None:
+        """Informe l'utilisateur d'un telechargement reussi et rafraichit la page."""
+        summary = getattr(result, "summary", None)
+        message = summary() if callable(summary) else "Carte telechargee."
+        current = self.current_page
+        if current is not None:
+            current.safe_refresh()
+        # Apres le rafraichissement, qui affiche son propre message d'etat.
+        self.show_status(message, timeout_ms=15000)
+        show_information(self, message, title="Telechargement de la carte")
+
+    def _on_card_download_failed(self, error: object) -> None:
+        """Presente l'echec d'un telechargement sous la forme message / cause / action."""
+        self.show_status("Echec du telechargement de la carte", timeout_ms=15000)
+        if isinstance(error, Exception):
+            show_error(self, error, title="Telechargement de la carte")
 
     @property
     def current_page(self) -> Page | None:

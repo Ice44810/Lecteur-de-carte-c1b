@@ -7,28 +7,33 @@ Points couverts, tous exiges par le cahier des charges :
 * l'empreinte SHA-256 est calculee et le doublon detecte, avec le message exact
   « Ce fichier a deja ete importe le JJ/MM/AAAA. » ;
 * **le fichier d'origine n'est jamais modifie** par l'examen ;
-* l'ecriture effective, prevue en phase 3, echoue explicitement plutot que
-  silencieusement.
+* l'import archive une copie immuable et verifiee, enregistre le fichier dans le
+  journal avec un etat de decodage honnete, et refuse un doublon.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import stat
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 
+from app.bootstrap import ApplicationContext
 from app.core.enums import FileType, ParsingStatus
-from app.core.exceptions import StorageError, UnsupportedFileTypeError
+from app.core.exceptions import DuplicateFileError, StorageError, UnsupportedFileTypeError
 from app.core.hashing import sha256_file
 from app.database.database import Database
+from app.services.driver_service import DriverService
 from app.services.import_service import FileInspection, ImportService
+from app.services.vehicle_service import VehicleService
+from tests.parser.c1b_synthetique import CarteSynthetique, mot_activite
 
 
 @pytest.fixture
-def service(migrated_database: Database) -> ImportService:
-    """Service d'import branche sur la base temporaire du test."""
-    return ImportService(migrated_database)
+def service(migrated_database: Database, context: ApplicationContext) -> ImportService:
+    """Service d'import branche sur la base et le repertoire temporaires du test."""
+    return ImportService(migrated_database, settings=context.settings)
 
 
 # --------------------------------------------------------------------------- #
@@ -178,11 +183,12 @@ def test_un_nom_different_ne_masque_pas_un_doublon(
 # --------------------------------------------------------------------------- #
 # Etat du decodage
 # --------------------------------------------------------------------------- #
-def test_l_examen_annonce_que_le_decodage_n_est_pas_disponible(
-    service: ImportService, opaque_c1b_file: Path
+def test_l_examen_annonce_que_le_decodage_c1b_est_disponible(
+    service: ImportService, opaque_c1b_file: Path, opaque_v1b_file: Path
 ) -> None:
-    """L'utilisateur doit savoir que le fichier sera archive, mais pas encore decode."""
-    assert service.inspect(opaque_c1b_file).decoding_available is False
+    """Le C1B est decode ; le V1B, aux structures non referencees, ne l'est pas."""
+    assert service.inspect(opaque_c1b_file).decoding_available is True
+    assert service.inspect(opaque_v1b_file).decoding_available is False
 
 
 # --------------------------------------------------------------------------- #
@@ -260,16 +266,256 @@ def test_la_date_du_dernier_import_est_retournee(service: ImportService, add_fil
 
 
 # --------------------------------------------------------------------------- #
-# Ecriture differee en phase 3
+# Import effectif : archivage et journal
 # --------------------------------------------------------------------------- #
-def test_l_import_effectif_echoue_explicitement(
+def test_l_import_archive_une_copie_identique_en_lecture_seule(
     service: ImportService, opaque_c1b_file: Path
 ) -> None:
-    """Une fonctionnalite non livree doit le dire, et ne rien ecrire a moitie."""
-    with pytest.raises(NotImplementedError, match="phase 3"):
+    ligne = service.import_file(opaque_c1b_file)
+
+    copie = Path(ligne.original_path)
+    assert copie.is_file()
+    assert copie.is_relative_to(service.originals_directory)
+    assert copie.read_bytes() == opaque_c1b_file.read_bytes()
+    assert sha256_file(copie) == ligne.sha256
+    assert not copie.stat().st_mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
+
+
+def test_l_import_ne_modifie_pas_le_fichier_source(
+    service: ImportService, opaque_c1b_file: Path
+) -> None:
+    avant = (opaque_c1b_file.read_bytes(), opaque_c1b_file.stat().st_mtime_ns)
+
+    service.import_file(opaque_c1b_file)
+
+    assert opaque_c1b_file.exists()
+    assert (opaque_c1b_file.read_bytes(), opaque_c1b_file.stat().st_mtime_ns) == avant
+
+
+def test_l_import_enregistre_le_fichier_au_journal(
+    service: ImportService, opaque_c1b_file: Path
+) -> None:
+    ligne = service.import_file(opaque_c1b_file)
+
+    assert service.count() == 1
+    assert ligne.filename == "conducteur.C1B"
+    assert ligne.file_type is FileType.C1B
+    assert ligne.file_size == opaque_c1b_file.stat().st_size
+    assert ligne.imported_at is not None
+    assert service.history()[0].id == ligne.id
+
+
+def test_un_fichier_sans_structure_de_carte_est_archive_en_echec(
+    service: ImportService, opaque_c1b_file: Path
+) -> None:
+    """Aucune donnee n'est inventee : l'etat dit pourquoi le contenu n'est pas lu."""
+    ligne = service.import_file(opaque_c1b_file)
+
+    assert ligne.parsing_status is ParsingStatus.FAILED
+    assert ligne.parsing_error is not None
+    assert "structure" in ligne.parsing_error
+    assert ligne.driver_display_name is None
+
+
+def test_un_fichier_v1b_reste_non_pris_en_charge(
+    service: ImportService, opaque_v1b_file: Path
+) -> None:
+    ligne = service.import_file(opaque_v1b_file)
+
+    assert ligne.parsing_status is ParsingStatus.UNSUPPORTED
+    assert "specification officielle" in (ligne.parsing_error or "")
+
+
+# --------------------------------------------------------------------------- #
+# Decodage et enregistrement d'une carte
+# --------------------------------------------------------------------------- #
+def carte_synthetique(
+    tmp_path: Path,
+    nom: str = "carte.C1B",
+    *,
+    signature: bytes = b"\xaa" * 128,
+    **options: object,
+) -> Path:
+    """Ecrit une carte synthetique (donnees fictives) et retourne son chemin."""
+    valeurs: dict[str, object] = {
+        "jours": [
+            (
+                date(2025, 10, 1),
+                [
+                    mot_activite(0, "REPOS"),
+                    mot_activite(6 * 60, "CONDUITE"),
+                    mot_activite(10 * 60, "REPOS"),
+                ],
+            )
+        ],
+        "vehicules": [
+            (
+                datetime(2025, 10, 1, 6, tzinfo=UTC),
+                datetime(2025, 10, 1, 10, tzinfo=UTC),
+                "AB-123-CD",
+                1000,
+                1300,
+            )
+        ],
+    }
+    valeurs.update(options)
+    chemin = tmp_path / nom
+    chemin.write_bytes(CarteSynthetique(**valeurs).fichier(signature=signature))  # type: ignore[arg-type]
+    return chemin
+
+
+def test_une_carte_importee_alimente_conducteur_vehicules_et_activites(
+    service: ImportService, migrated_database: Database, tmp_path: Path
+) -> None:
+    ligne = service.import_file(carte_synthetique(tmp_path))
+
+    assert ligne.parsing_status is ParsingStatus.SUCCESS
+    assert ligne.driver_display_name == "DUPONT MARIE"
+    assert "3 activite(s) ajoutee(s)" in (ligne.parsing_error or "")
+    fiche = DriverService(migrated_database).get_by_card_number("F123456789012301")
+    assert fiche is not None
+    assert (fiche.activities_count, fiche.files_count) == (3, 1)
+    assert fiche.card_expiry_date == date(2027, 1, 31)
+    assert [item.registration for item in VehicleService(migrated_database).list_vehicles()] == [
+        "AB-123-CD"
+    ]
+
+
+def test_un_second_telechargement_ne_differant_que_par_ses_signatures_est_un_doublon(
+    service: ImportService, tmp_path: Path
+) -> None:
+    premier = service.import_file(carte_synthetique(tmp_path, "a.C1B", signature=b"\x01" * 128))
+
+    with pytest.raises(DuplicateFileError) as erreur:
+        service.import_file(carte_synthetique(tmp_path, "b.C1B", signature=b"\x02" * 128))
+
+    assert erreur.value.existing_file_id == premier.id
+
+
+def test_un_telechargement_plus_recent_n_ajoute_que_les_nouvelles_activites(
+    service: ImportService, migrated_database: Database, tmp_path: Path
+) -> None:
+    jour = date(2025, 10, 1)
+    premiere_journee = [mot_activite(0, "REPOS"), mot_activite(6 * 60, "CONDUITE")]
+    service.import_file(carte_synthetique(tmp_path, "a.C1B", jours=[(jour, premiere_journee)]))
+
+    ligne = service.import_file(
+        carte_synthetique(
+            tmp_path,
+            "b.C1B",
+            jours=[(jour, premiere_journee), (date(2025, 10, 2), [mot_activite(0, "REPOS")])],
+        )
+    )
+
+    assert "1 activite(s) ajoutee(s)" in (ligne.parsing_error or "")
+    fiche = DriverService(migrated_database).get_by_card_number("F123456789012301")
+    assert fiche is not None
+    assert fiche.activities_count == 3
+
+
+def test_une_saisie_manuelle_n_est_pas_ecrasee_par_le_decodage(
+    service: ImportService, migrated_database: Database, tmp_path: Path
+) -> None:
+    DriverService(migrated_database).create(card_number="F123456789012301", last_name="SAISI")
+
+    service.import_file(carte_synthetique(tmp_path))
+
+    fiche = DriverService(migrated_database).get_by_card_number("F123456789012301")
+    assert fiche is not None
+    assert (fiche.last_name, fiche.first_name) == ("SAISI", "MARIE")
+
+
+def test_le_decodage_peut_etre_rejoue_sans_doublon(
+    service: ImportService, migrated_database: Database, tmp_path: Path
+) -> None:
+    ligne = service.import_file(carte_synthetique(tmp_path))
+
+    rejoue = service.redecode(ligne.id)
+
+    assert rejoue.parsing_status is ParsingStatus.SUCCESS
+    assert "0 activite(s) ajoutee(s)" in (rejoue.parsing_error or "")
+    fiche = DriverService(migrated_database).get_by_card_number("F123456789012301")
+    assert fiche is not None and fiche.activities_count == 3
+
+
+def test_les_fichiers_en_attente_sont_decodes_a_la_demande(
+    service: ImportService, add_file, tmp_path: Path
+) -> None:
+    archive = carte_synthetique(tmp_path)
+    identifiant = add_file(
+        sha256="c" * 64,
+        parsing_status=ParsingStatus.UNSUPPORTED,
+        original_path=str(archive),
+    )
+
+    (ligne,) = service.redecode_pending()
+
+    assert ligne.id == identifiant
+    assert ligne.parsing_status is ParsingStatus.SUCCESS
+    assert ligne.driver_display_name == "DUPONT MARIE"
+
+
+def test_un_fichier_vide_est_archive_avec_l_etat_echec(
+    service: ImportService, empty_c1b_file: Path
+) -> None:
+    ligne = service.import_file(empty_c1b_file)
+
+    assert ligne.parsing_status is ParsingStatus.FAILED
+    assert "vide.C1B est vide" in (ligne.parsing_error or "")
+    assert Path(ligne.original_path).is_file()
+
+
+def test_un_doublon_est_refuse_meme_renomme(
+    service: ImportService, opaque_c1b_file: Path, tmp_path: Path
+) -> None:
+    premier = service.import_file(opaque_c1b_file)
+    copie = tmp_path / "renomme.C1B"
+    copie.write_bytes(opaque_c1b_file.read_bytes())
+
+    with pytest.raises(DuplicateFileError) as erreur:
+        service.import_file(copie)
+
+    assert erreur.value.existing_file_id == premier.id
+    assert "deja ete importe" in erreur.value.message
+    assert service.count() == 1
+
+
+def test_une_copie_laissee_par_un_import_interrompu_est_reutilisee(
+    service: ImportService, opaque_c1b_file: Path
+) -> None:
+    digest = sha256_file(opaque_c1b_file)
+    orpheline = service.originals_directory / digest[:2] / f"{digest}.C1B"
+    orpheline.parent.mkdir(parents=True, exist_ok=True)
+    orpheline.write_bytes(opaque_c1b_file.read_bytes())
+
+    ligne = service.import_file(opaque_c1b_file)
+
+    assert Path(ligne.original_path) == orpheline
+
+
+def test_une_archive_alteree_n_est_jamais_ecrasee(
+    service: ImportService, opaque_c1b_file: Path
+) -> None:
+    digest = sha256_file(opaque_c1b_file)
+    alteree = service.originals_directory / digest[:2] / f"{digest}.C1B"
+    alteree.parent.mkdir(parents=True, exist_ok=True)
+    alteree.write_bytes(b"contenu different")
+
+    with pytest.raises(StorageError):
         service.import_file(opaque_c1b_file)
 
+    assert alteree.read_bytes() == b"contenu different"
     assert service.count() == 0
+
+
+def test_une_extension_inconnue_n_est_pas_archivee(
+    service: ImportService, unsupported_file: Path
+) -> None:
+    with pytest.raises(UnsupportedFileTypeError):
+        service.import_file(unsupported_file)
+
+    assert service.count() == 0
+    assert not any(service.originals_directory.rglob("*.*"))
 
 
 # --------------------------------------------------------------------------- #

@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.analysis.rules import RULESET_FILENAME, load_ruleset
+from app.analysis.rules import RULESET_FILENAME
 from app.ui.common.page import Page
 from app.ui.common.widgets import NoticeBanner, ReadOnlyTable
 
@@ -126,7 +126,8 @@ class SettingsPage(Page):
         self._log_value.setText(f"{settings.log_path} (niveau {settings.log_level})")
         self._schema_value.setText(str(self.context.schema_version))
 
-        ruleset = load_ruleset(settings.data_dir / RULESET_FILENAME)
+        ruleset = self.context.ruleset
+        ruleset_path = settings.data_dir / RULESET_FILENAME
         self._rules_table.set_rows(
             tuple(
                 (
@@ -139,15 +140,24 @@ class SettingsPage(Page):
                 for parameter in ruleset.parameters.values()
             )
         )
-        if ruleset.is_empty:
+        error = self.context.ruleset_error
+        if error is not None:
+            self._rules_notice.setText(
+                f"Le fichier {ruleset_path} n'a pas pu etre utilise : {error.message} "
+                f"{error.cause} Aucun seuil n'est applique tant qu'il n'est pas corrige "
+                "(correction prise en compte au prochain demarrage). "
+                f"Detail : {error.technical_detail or '-'}"
+            )
+        elif ruleset.is_empty:
             self._rules_notice.setText(
                 "Aucun seuil verifie n'est configure : aucun depassement n'est recherche. "
-                f"Pour en ajouter, creez le fichier {settings.data_dir / RULESET_FILENAME}. "
+                f"Pour en ajouter, creez le fichier {ruleset_path}. "
                 "Chaque seuil doit citer le texte qui le fixe et etre marque comme confirme."
             )
         else:
             self._rules_notice.setText(
-                f"Jeu de regles {ruleset.version} : {len(ruleset.parameters)} parametre(s), "
+                f"Jeu de regles {ruleset.version} (charge au demarrage depuis {ruleset_path}) : "
+                f"{len(ruleset.parameters)} parametre(s), "
                 f"dont {len(ruleset.usable_parameters)} verifie(s) et applicable(s)."
             )
 

@@ -25,6 +25,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -83,6 +84,8 @@ class Settings(BaseSettings):
         sql_echo: Active la trace SQL de SQLAlchemy (developpement uniquement).
         auto_migrate: Applique les migrations de schema au demarrage.
         pcsc_enabled: Autorise l'utilisation du lecteur PC/SC.
+        card_auto_download: Telecharge et importe automatiquement une carte
+            conducteur des son insertion dans le lecteur.
         timezone_display: Fuseau utilise pour l'affichage (le stockage reste en UTC).
     """
 
@@ -110,6 +113,7 @@ class Settings(BaseSettings):
     log_backup_count: int = Field(default=5, ge=0)
 
     pcsc_enabled: bool = True
+    card_auto_download: bool = True
     timezone_display: str = "Europe/Paris"
 
     @field_validator("data_dir", "log_dir", mode="after")
@@ -124,6 +128,18 @@ class Settings(BaseSettings):
         """Refuse un nom de fichier contenant un separateur de chemin."""
         if not value or "/" in value or value in {".", ".."}:
             raise ValueError("database_filename doit etre un simple nom de fichier")
+        return value
+
+    @field_validator("timezone_display", mode="after")
+    @classmethod
+    def _validate_timezone(cls, value: str) -> str:
+        """Refuse un fuseau inconnu, qui ferait echouer chaque affichage de date."""
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(
+                f"fuseau horaire inconnu : '{value}' (exemple attendu : Europe/Paris)"
+            ) from exc
         return value
 
     # ------------------------------------------------------------------ #

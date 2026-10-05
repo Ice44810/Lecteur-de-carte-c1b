@@ -35,13 +35,14 @@ def window(application, context: ApplicationContext) -> MainWindow:
 # --------------------------------------------------------------------------- #
 # Construction
 # --------------------------------------------------------------------------- #
-def test_la_navigation_declare_les_dix_pages_attendues() -> None:
+def test_la_navigation_declare_les_pages_attendues() -> None:
     assert TOUTES_LES_CLES == (
         "dashboard",
         "drivers",
         "vehicles",
         "import",
         "history",
+        "card_data",
         "activities",
         "anomalies",
         "reports",

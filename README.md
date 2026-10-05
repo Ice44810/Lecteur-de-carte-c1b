@@ -5,10 +5,13 @@ l'archivage et l'analyse des données tachygraphiques : fichiers de carte
 conducteur (`.C1B`), fichiers d'unité embarquée (`.V1B`) et, à terme, lecture
 directe d'une carte conducteur via un lecteur PC/SC.
 
-**État : phase 1 (socle) terminée.** L'application démarre, gère son référentiel
-conducteurs / véhicules, enregistre les fichiers importés et calcule les temps
-d'activité. **Le décodage du contenu binaire des fichiers C1B et V1B n'est pas
-implémenté**, et aucune règle réglementaire n'est active. Les deux sections
+**État.** L'application lit une carte conducteur dès son insertion dans un lecteur
+PC/SC, décode les fichiers de carte (`.C1B`), enregistre conducteur, véhicules et
+activités, calcule les temps et produit le rapport de carte (écran, Excel, PDF,
+CSV). Le décodage a été validé sur une carte réelle en comparant chaque valeur à
+celles d'un logiciel de lecture du marché. **Le décodage des fichiers d'unité
+embarquée (`.V1B`) n'est pas implémenté**, et aucune règle réglementaire n'est
+active. Les deux sections
 [Ce que l'application fait aujourd'hui](#ce-que-lapplication-fait-aujourdhui) et
 [Ce qu'elle ne fait pas encore](#ce-quelle-ne-fait-pas-encore) détaillent cette
 frontière, qui est délibérée : voir
@@ -105,6 +108,30 @@ l'utilisateur est renvoyé vers l'import existant. **L'examen n'écrit rien dans
 fichier d'origine** — un test vérifie que les octets, la taille et la date de
 modification sont inchangés.
 
+**Archivage.** Le fichier est copié dans `originals/`, l'empreinte de la copie est
+vérifiée, la copie passe en lecture seule et le fichier est inscrit dans
+l'historique des téléchargements. Deux téléchargements d'une même carte qui ne
+diffèrent que par leurs signatures (les signatures de 2e génération changent à
+chaque lecture) sont reconnus comme un doublon. Un fichier vide ou tronqué est
+archivé avec l'état « Échec ». Le décodage peut être rejoué sur les archives
+depuis l'historique, sans nouvel import.
+
+**Décodage des cartes (`.C1B`).** Identité du titulaire et de la carte, permis de
+conduire, activités (avec le statut carte insérée, saisie manuelle ou inconnue, et
+conducteur seul ou équipage), véhicules utilisés et kilométrages, lieux de début
+et de fin de période, événements et anomalies, conditions particulières. Les
+structures sont celles de l'appendice 1 de l'annexe IC du règlement (UE) 2016/799.
+Les données propres à la 2e génération (positions GNSS) sont archivées mais pas
+encore affichées. Une fiche saisie manuellement n'est jamais écrasée : seuls ses
+champs vides sont complétés. Une activité déjà enregistrée par un téléchargement
+précédent n'est pas dupliquée.
+
+**Rapport de carte.** Page « Données de la carte » et exports Excel (une feuille
+par rubrique), PDF et CSV : informations de la carte, événements, périodes de
+travail journalières (avec l'interruption qui suit chacune et sa part dans les
+24 heures), activités, véhicules et pays, en heure locale. Ce sont des mesures,
+sans appréciation de conformité.
+
 **Calcul des temps.** À partir d'activités enregistrées en base, l'application
 reconstitue une chronologie par journée et par semaine, cumule les durées par
 type d'activité (conduite, travail, disponibilité, repos) et signale les
@@ -116,6 +143,18 @@ diagnostic explicite de chaque situation (pile PC/SC absente, service arrêté,
 lecteur débranché, carte absente, carte non reconnue), et simulateur permettant
 de développer et de tester sans matériel.
 
+**Téléchargement automatique de la carte conducteur.** Dès qu'une carte conducteur
+est insérée, l'application la lit en tâche de fond, assemble le fichier `.C1B`
+(application de 1re génération et, si présente, de 2e génération, avec les
+signatures calculées par la carte), l'écrit dans `imports/` puis l'archive et
+l'inscrit dans l'historique, sans action de l'utilisateur. La lecture est **en
+lecture seule** : aucune donnée n'est écrite sur la carte, si bien que la date de
+dernier téléchargement qu'elle mémorise (`LastCardDownload`) n'est pas mise à jour.
+Chaque commande et chaque identifiant cite son exigence dans le règlement
+d'exécution (UE) 2016/799, annexe IC (appendices 2 et 7). Ces points sont à l'état
+« En cours de validation » tant qu'un téléchargement réel n'a pas été vérifié avec
+un outil tiers. Désactivable avec `TACHY_CARD_AUTO_DOWNLOAD=false`.
+
 ## Ce qu'elle ne fait pas encore
 
 Ces manques sont documentés, isolés derrière des interfaces, et couverts par des
@@ -123,18 +162,20 @@ tests qui vérifient que le refus est explicite.
 
 | Fonction | État | Raison |
 | --- | --- | --- |
-| Décodage du contenu C1B | Non implémenté | 7 points de structure binaire à confirmer sur spécification officielle |
+| Affichage des données de 2e génération (GNSS) | Non implémenté | Archivées, non décodées |
+| Vérification des signatures des fichiers de carte | Non implémenté | Chaîne de certificats à mettre en place |
 | Décodage du contenu V1B | Non implémenté | 3 points à confirmer |
-| Extraction depuis une carte | Non implémenté | 4 points à confirmer (sélection d'application, identifiants de fichiers, séquence de lecture, assemblage) |
+| Mise à jour de `LastCardDownload` sur la carte | Non implémenté | Écriture volontairement exclue avant validation sur cartes réelles |
 | Détection de dépassements | Aucune règle active | Aucun seuil réglementaire n'a été vérifié sur sa source |
-| Rapports PDF et Excel | Non implémenté | Dépend du décodage |
 | API REST et synchronisation TMS | Non implémenté | Phases 14 et 15 |
 | Paquet `.deb` / AppImage | Non implémenté | Phase 13 |
 
 Toute tentative d'utiliser une de ces fonctions lève une erreur applicative
 portant un message, une cause et une action — jamais une valeur inventée.
-Concrètement, `parse()` sur un fichier C1B lève `UnconfirmedStructureError` en
-citant les points à confirmer, et le jeu de règles livré par défaut est vide
+Concrètement, chaque méthode d'extraction du parser C1B lève
+`UnconfirmedStructureError` en citant le point à confirmer — `parse()` les rassemble
+en un résultat partiel dont les diagnostics listent ce qui n'a pas été lu — et le jeu
+de règles livré par défaut est vide
 (version `0.0.0-empty`), ce qui est signalé sur le tableau de bord par la mention
 « aucun dépassement n'est recherché ».
 
@@ -151,10 +192,10 @@ seulement déconseillée.
 1. **Aucune structure binaire n'est devinée.** Un offset, une longueur ou un
    codage non confirmé sur une source officielle n'est pas implémenté. Le code
    concerné lève `UnconfirmedStructureError` en citant les questions ouvertes.
-2. **Aucune commande de carte n'est inventée.** Seules les formes génériques
-   d'APDU définies par l'ISO/IEC 7816-4 sont implémentées. Aucun identifiant de
-   fichier tachygraphique n'est codé, et lorsqu'une extraction est refusée,
-   **aucune commande n'est transmise à la carte**.
+2. **Aucune commande de carte n'est inventée.** Chaque commande et chaque
+   identifiant de fichier cite l'exigence du règlement (UE) 2016/799 qui le
+   définit. Tant qu'un point de spécification de la carte est à l'état « À
+   confirmer », **aucune commande n'est transmise à la carte**.
 3. **Aucun seuil réglementaire sans source.** Un seuil se saisit dans
    `rules.json` avec la référence du texte qui le fixe, puis doit être marqué
    comme confirmé pour devenir applicable. Un seuil non confirmé ne peut pas
@@ -221,7 +262,8 @@ Toutes les variables d'environnement portent le préfixe `TACHY_` et peuvent
 | `TACHY_COMPANY_NAME` | vide | Raison sociale, utilisée en en-tête de rapport |
 | `TACHY_AUTO_MIGRATE` | `true` | Applique les migrations au démarrage |
 | `TACHY_PCSC_ENABLED` | `true` | Autorise l'usage du lecteur PC/SC |
-| `TACHY_TIMEZONE_DISPLAY` | `Europe/Paris` | Fuseau d'affichage (le stockage reste en UTC) |
+| `TACHY_CARD_AUTO_DOWNLOAD` | `true` | Télécharge et importe la carte dès son insertion |
+| `TACHY_TIMEZONE_DISPLAY` | `Europe/Paris` | Fuseau d'affichage des horodatages d'import (le stockage et les frises d'activité restent en UTC) |
 
 La racine de données contient `originals/` (archivage immuable), `imports/`
 (travail), `database/` et `exports/`.
@@ -230,12 +272,12 @@ La racine de données contient `originals/` (archivage immuable), `imports/`
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                  # 716 tests
+python -m pytest                                  # 821 tests
 python -m pytest --cov=app --cov-report=term-missing
 ruff check app tests && ruff format --check app tests
 ```
 
-716 tests couvrent 98 % des instructions de `app` (hors interface et point
+821 tests couvrent 96 % des instructions de `app` (hors interface et point
 d'entrée, testés séparément). Les tests d'interface s'exécutent sans écran grâce
 à `QT_QPA_PLATFORM=offscreen`, positionné automatiquement, et les tests PC/SC
 n'exigent aucun matériel : la bibliothèque `pyscard` y est remplacée par un
@@ -244,15 +286,15 @@ carte en cours de lecture.
 
 | Domaine | Tests |
 | --- | --- |
-| `tests/analysis` | 130 |
-| `tests/card_reader` | 125 |
-| `tests/services` | 118 |
-| `tests/parser` | 96 |
+| `tests/services` | 159 |
+| `tests/analysis` | 133 |
+| `tests/card_reader` | 141 |
+| `tests/parser` | 114 |
 | `tests/core` | 80 |
-| `tests/database` | 80 |
-| `tests/ui` | 49 |
-| `tests/config` | 18 |
-| Démarrage (`bootstrap`, `main`) | 20 |
+| `tests/database` | 81 |
+| `tests/ui` | 70 |
+| `tests/config` | 19 |
+| Démarrage (`bootstrap`, `main`) | 24 |
 
 Le projet n'est pas considéré comme livrable si un test échoue.
 
@@ -262,16 +304,16 @@ Le projet n'est pas considéré comme livrable si un test échoue.
 | --- | --- | --- |
 | 1 | Socle : configuration, base, interface, tests | terminée |
 | 2 | Modèles de données | terminée |
-| 3 | Import et archivage des fichiers C1B | en attente du décodage |
-| 4 | Décodage C1B | à faire — nécessite la spécification officielle |
-| 5 | Activités conducteur | structures prêtes |
+| 3 | Import et archivage des fichiers C1B | terminée |
+| 4 | Décodage C1B | terminée (1re génération ; données GNSS de 2e génération à afficher) |
+| 5 | Activités conducteur | terminée |
 | 6 | Analyse des temps | primitives prêtes, persistance à faire |
 | 7 | Moteur de règles | cadre prêt, aucune règle active |
 | 8 | Tableau de bord | terminée |
-| 9 | Rapports PDF et Excel | à faire |
+| 9 | Rapports PDF et Excel | rapport de carte terminé |
 | 10 | Import V1B | à faire |
 | 11 | Lecteur PC/SC | terminée |
-| 12 | Lecture d'une carte conducteur | à faire — nécessite la spécification officielle |
+| 12 | Lecture d'une carte conducteur | terminée, en lecture seule (validée sur une carte réelle) |
 | 13 | Paquet Linux (`.deb`, AppImage) | à faire |
 | 14 | API REST (FastAPI) | à faire |
 | 15 | Synchronisation TMS | à faire |

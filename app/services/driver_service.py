@@ -11,7 +11,13 @@ from app.database.models import Driver
 from app.database.repositories import ActivityRepository, DriverRepository, ImportRepository
 from app.services.base import BaseService
 
-__all__ = ["DriverService", "DriverSummary", "DriverNotFoundError"]
+__all__ = [
+    "DriverService",
+    "DriverSummary",
+    "DriverNotFoundError",
+    "DriverConflictError",
+    "normalize_card_number",
+]
 
 logger = get_logger(__name__)
 
@@ -22,6 +28,41 @@ class DriverNotFoundError(TachyError):
     default_message = "Ce conducteur n'existe pas."
     default_cause = "La fiche a peut-etre ete supprimee depuis l'ouverture de la liste."
     default_action = "Revenez a la liste des conducteurs et actualisez-la."
+
+
+class DriverConflictError(TachyError):
+    """Une fiche existe deja pour ce numero de carte, avec des donnees differentes."""
+
+    default_message = "Ce numero de carte est deja attribue a un autre conducteur."
+    default_cause = (
+        "Une fiche existe deja pour ce numero de carte et ses informations different "
+        "de celles saisies."
+    )
+    default_action = "Verifiez le numero de carte saisi. La fiche existante n'a pas ete modifiee."
+
+
+def normalize_card_number(card_number: str) -> str:
+    """Normalise un numero de carte conducteur saisi ou decode.
+
+    Le numero de carte est l'identifiant metier du conducteur : deux saisies d'une
+    meme carte (« f 1234... » et « F1234... ») doivent designer la meme fiche. Les
+    espaces sont retires et les lettres passees en majuscules.
+
+    Args:
+        card_number: Numero tel que saisi.
+
+    Returns:
+        Le numero normalise, eventuellement vide.
+    """
+    return "".join(card_number.split()).upper()
+
+
+def _clean(value: str | None) -> str | None:
+    """Retire les espaces superflus et convertit une chaine vide en ``None``."""
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +186,10 @@ class DriverService(BaseService):
         donnees saisies sont conservees telles quelles et ne seront jamais ecrasees
         silencieusement par un decodage ulterieur.
 
+        Si une fiche existe deja pour ce numero de carte, seuls ses champs encore
+        vides sont completes. Une valeur saisie qui contredit une valeur deja
+        enregistree n'est jamais appliquee : l'operation est refusee.
+
         Args:
             card_number: Numero de carte, identifiant metier obligatoire.
             first_name: Prenom.
@@ -157,22 +202,27 @@ class DriverService(BaseService):
 
         Raises:
             ValueError: Le numero de carte est vide.
+            DriverConflictError: Une fiche existe pour ce numero avec des donnees
+                differentes de celles saisies.
         """
-        normalized = card_number.strip()
+        normalized = normalize_card_number(card_number)
         if not normalized:
             raise ValueError("le numero de carte est obligatoire")
 
+        values: dict[str, object] = {
+            "first_name": _clean(first_name),
+            "last_name": _clean(last_name),
+            "card_issuing_country": (_clean(card_issuing_country) or "").upper() or None,
+            "card_expiry_date": card_expiry_date,
+        }
+
         with self._session() as session:
             repository = DriverRepository(session)
-            driver, created = repository.get_or_create(
-                normalized,
-                first_name=first_name or None,
-                last_name=last_name or None,
-                card_issuing_country=card_issuing_country or None,
-                card_expiry_date=card_expiry_date,
-            )
+            driver, created = repository.get_or_create(normalized, **values)
             if created:
                 logger.info("Conducteur cree (carte %s)", mask_card_number(normalized))
+            else:
+                self._complete(driver, values, card_number=normalized)
             summary = self._to_summary(session, driver)
         return summary
 
@@ -180,9 +230,42 @@ class DriverService(BaseService):
     # Interne
     # ------------------------------------------------------------------ #
     @staticmethod
+    def _complete(driver: Driver, values: dict[str, object], *, card_number: str) -> None:
+        """Complete les champs vides d'une fiche existante, sans jamais en ecraser.
+
+        Raises:
+            DriverConflictError: Une valeur saisie contredit la valeur enregistree.
+        """
+        conflicts = [
+            field_name
+            for field_name, value in values.items()
+            if value is not None
+            and getattr(driver, field_name) is not None
+            and str(getattr(driver, field_name)).casefold() != str(value).casefold()
+        ]
+        if conflicts:
+            raise DriverConflictError(
+                technical_detail=(
+                    f"carte {mask_card_number(card_number)} : champs en conflit {conflicts}"
+                )
+            )
+        completed = [
+            field_name
+            for field_name, value in values.items()
+            if value is not None and getattr(driver, field_name) is None
+        ]
+        for field_name in completed:
+            setattr(driver, field_name, values[field_name])
+        if completed:
+            logger.info(
+                "Fiche conducteur completee (carte %s) : %s",
+                mask_card_number(card_number),
+                ", ".join(completed),
+            )
+
+    @staticmethod
     def _to_summary(session: object, driver: Driver) -> DriverSummary:
         """Construit un objet de transfert pendant que la session est ouverte."""
-        assert hasattr(session, "scalars")
         activity_repository = ActivityRepository(session)  # type: ignore[arg-type]
         import_repository = ImportRepository(session)  # type: ignore[arg-type]
         last_end = activity_repository.latest_activity_datetime(driver.id)
@@ -195,7 +278,7 @@ class DriverService(BaseService):
             birth_date=driver.birth_date,
             card_issuing_country=driver.card_issuing_country,
             card_expiry_date=driver.card_expiry_date,
-            files_count=len(import_repository.list_filtered(driver_id=driver.id)),
-            activities_count=len(activity_repository.list_for_driver(driver.id)),
+            files_count=import_repository.count_for_driver(driver.id),
+            activities_count=activity_repository.count_for_driver(driver.id),
             last_activity_end=last_end.date() if last_end is not None else None,
         )

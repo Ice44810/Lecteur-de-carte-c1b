@@ -25,6 +25,7 @@ l'integration continue et au diagnostic d'une installation sans ecran.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -107,14 +108,29 @@ def _build_settings(arguments: argparse.Namespace) -> Settings | None:
     return Settings(**overrides)  # type: ignore[arg-type]
 
 
-def _report_startup_failure(error: Exception) -> None:
+def _graphical_session_available() -> bool:
+    """Indique si une boite de dialogue peut etre affichee a un utilisateur.
+
+    Sans serveur d'affichage, Qt interrompt brutalement le processus a la creation de
+    l'application (erreur fatale non interceptable) ; avec la plate-forme
+    ``offscreen``, une boite modale bloquerait indefiniment sans que personne ne
+    puisse la fermer. Dans ces deux cas, la sortie d'erreur suffit.
+    """
+    if os.environ.get("QT_QPA_PLATFORM", "").startswith(("offscreen", "minimal")):
+        return False
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _report_startup_failure(error: Exception, *, interactive: bool = True) -> None:
     """Presente une erreur de demarrage sans exiger de serveur graphique.
 
-    La boite de dialogue Qt n'est tentee qu'en dernier recours : si Qt lui-meme est
-    indisponible, le message reste lisible sur la sortie d'erreur.
+    Le message est toujours ecrit sur la sortie d'erreur. La boite de dialogue Qt
+    n'est ajoutee que pour un lancement interactif disposant d'un affichage.
 
     Args:
         error: Exception ayant interrompu le demarrage.
+        interactive: ``False`` en mode ``--check`` : aucune boite de dialogue ne
+            doit alors bloquer un diagnostic automatise.
     """
     from app.ui.common.errors import format_error
 
@@ -125,6 +141,8 @@ def _report_startup_failure(error: Exception) -> None:
     print(f"Cause  : {cause}", file=sys.stderr)
     print(f"Action : {action}", file=sys.stderr)
 
+    if not interactive or not _graphical_session_available():
+        return
     try:
         from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -181,7 +199,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         context = bootstrap(_build_settings(arguments))
     except Exception as exc:  # noqa: BLE001 - dernier filet avant la sortie
-        _report_startup_failure(exc)
+        _report_startup_failure(exc, interactive=not arguments.check)
         return EXIT_STARTUP_FAILURE
 
     if arguments.check:
@@ -190,6 +208,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from PySide6.QtWidgets import QApplication
 
+    from app.ui.cards.card_watcher import CardWatcher
     from app.ui.main_window import MainWindow
 
     application = QApplication.instance() or QApplication(sys.argv[:1])
@@ -197,10 +216,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     application.setApplicationVersion(__version__)
     application.setOrganizationName(context.settings.company_name or "tachy-linux")
 
-    window = MainWindow(context)
+    watcher = CardWatcher(context)
+    window = MainWindow(context, card_watcher=watcher)
     window.show()
+    watcher.start()
     logger.info("Interface affichee")
-    return int(application.exec())
+    try:
+        return int(application.exec())
+    finally:
+        watcher.stop()
 
 
 if __name__ == "__main__":

@@ -1,12 +1,14 @@
 """Service de production des rapports.
 
-ETAT : NON IMPLEMENTE (phase 9 de la feuille de route).
+Les generateurs (``app.reports.pdf``, ``app.reports.excel``, ``app.reports.csv_export``)
+recoivent des objets deja calcules par
+:class:`~app.services.card_report_service.CardReportService` : un generateur de
+rapport n'interroge jamais la base et ne recalcule aucun temps.
 
-Le contrat est fixe des maintenant afin que l'interface, les tests et la future API
-puissent s'y referer. Les generateurs (``app.reports.pdf``, ``app.reports.excel``,
-``app.reports.csv``) recevront des objets de transfert deja calcules par
-``AnalysisService`` : un generateur de rapport ne doit jamais interroger la base ni
-recalculer un temps.
+* rapport conducteur : les six rubriques du rapport de carte (Excel : une feuille par
+  rubrique ; PDF : une section par rubrique ; CSV : les activites) ;
+* rapport entreprise : une ligne de synthese par conducteur ayant des activites sur
+  la periode.
 
 Contenu attendu du rapport conducteur (section 13) : identite, periode, activites,
 temps de conduite, temps de repos, anomalies, evenements, fichier source.
@@ -22,12 +24,15 @@ portees par ``RuleResult.regulation_reference`` et ``RuleEvaluation.ruleset_vers
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from app.config.logging_config import get_logger
 from app.config.settings import Settings, get_settings
+from app.core.exceptions import ReportError
+from app.core.timeutils import ensure_utc
 from app.services.base import BaseService
 
 __all__ = ["ReportFormat", "ReportRequest", "ReportService"]
@@ -79,6 +84,11 @@ class ReportRequest:
     driver_ids: tuple[int, ...] = ()
     output_path: Path | None = None
 
+    def __post_init__(self) -> None:
+        """Refuse une periode vide ou inversee."""
+        if self.period_end <= self.period_start:
+            raise ValueError("la fin de la periode du rapport doit suivre son debut")
+
     @property
     def is_company_report(self) -> bool:
         """Indique un rapport entreprise plutot qu'un rapport conducteur."""
@@ -118,7 +128,10 @@ class ReportService(BaseService):
         if request.output_path is not None:
             return request.output_path
         scope = "entreprise" if request.is_company_report else f"conducteur-{request.driver_ids[0]}"
-        stamp = f"{request.period_start.strftime('%Y%m%d')}-{request.period_end.strftime('%Y%m%d')}"
+        zone = ZoneInfo(self._settings.timezone_display)
+        first_day = ensure_utc(request.period_start).astimezone(zone)
+        last_day = (ensure_utc(request.period_end) - timedelta(seconds=1)).astimezone(zone)
+        stamp = f"{first_day:%Y%m%d}-{last_day:%Y%m%d}"
         return self.export_directory / f"rapport-{scope}-{stamp}{request.report_format.extension}"
 
     def generate(self, request: ReportRequest) -> Path:
@@ -131,9 +144,75 @@ class ReportService(BaseService):
             Le chemin du fichier produit.
 
         Raises:
-            NotImplementedError: Fonctionnalite prevue en phase 9.
+            ReportError: Aucun conducteur n'a de donnees sur la periode (rapport
+                entreprise), ou le fichier n'a pas pu etre ecrit.
+            CardReportError: Le conducteur demande n'existe pas.
         """
-        raise NotImplementedError(
-            "La production des rapports PDF, Excel et CSV est prevue en phase 9. "
-            "Le contrat de service et le nommage des fichiers sont deja fixes."
-        )
+        from app import __version__
+        from app.reports.csv_export import write_csv
+        from app.reports.excel import write_excel
+        from app.reports.pdf import write_pdf
+        from app.reports.tables import card_report_tables, summary_table
+        from app.services.card_report_service import CardReportService
+
+        builder = CardReportService(self.database, settings=self._settings)
+        if request.is_company_report:
+            reports = tuple(
+                report
+                for driver_id in self._driver_ids()
+                if (
+                    report := builder.build(
+                        driver_id,
+                        period_start=request.period_start,
+                        period_end=request.period_end,
+                    )
+                ).work_periods
+            )
+            if not reports:
+                raise ReportError(
+                    "Aucune donnee a exporter sur cette periode.",
+                    cause="Aucun conducteur n'a d'activite de travail enregistree sur la periode.",
+                    action="Choisissez une autre periode ou importez les cartes concernees.",
+                )
+            tables = (summary_table(reports),)
+            header = (
+                f"tachy-linux {__version__}, rapport entreprise"
+                f"{' ' + self._settings.company_name if self._settings.company_name else ''}"
+            )
+        else:
+            report = builder.build(
+                request.driver_ids[0],
+                period_start=request.period_start,
+                period_end=request.period_end,
+            )
+            tables = card_report_tables(report)
+            header = f"tachy-linux {__version__}, {report.title}"
+
+        path = self.suggest_output_path(request)
+        try:
+            if request.report_format is ReportFormat.EXCEL:
+                write_excel(path, header, tables)
+            elif request.report_format is ReportFormat.PDF:
+                write_pdf(path, header, tables)
+            else:
+                activities = next((table for table in tables if table.title == "Activites"), None)
+                write_csv(path, activities or tables[0])
+        except OSError as exc:
+            raise ReportError(
+                "Le rapport n'a pas pu etre enregistre.",
+                cause="Le repertoire d'export est inaccessible ou le fichier est ouvert.",
+                action=(
+                    "Fermez le fichier s'il est ouvert, puis verifiez les droits sur "
+                    f"{path.parent}."
+                ),
+                technical_detail=str(exc),
+            ) from exc
+        logger.info("Rapport %s produit : %s", request.report_format.value, path.name)
+        return path
+
+    def _driver_ids(self) -> list[int]:
+        """Identifiants de tous les conducteurs, tries par nom."""
+        from app.database.repositories import DriverRepository
+
+        with self._session() as session:
+            return [driver.id for driver in DriverRepository(session).list_ordered()]

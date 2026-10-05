@@ -17,16 +17,27 @@ les services et leurs objets de transfert.
 from app.services.analysis_service import AnalysisService, PeriodAnalysis, TimelineEntry
 from app.services.base import BaseService
 from app.services.dashboard_service import DashboardData, DashboardService
-from app.services.driver_service import DriverNotFoundError, DriverService, DriverSummary
+from app.services.driver_service import (
+    DriverConflictError,
+    DriverNotFoundError,
+    DriverService,
+    DriverSummary,
+)
 from app.services.import_service import FileInspection, ImportRecord, ImportService
 from app.services.report_service import ReportFormat, ReportRequest, ReportService
-from app.services.vehicle_service import VehicleNotFoundError, VehicleService, VehicleSummary
+from app.services.vehicle_service import (
+    VehicleConflictError,
+    VehicleNotFoundError,
+    VehicleService,
+    VehicleSummary,
+)
 
 __all__ = [
     "AnalysisService",
     "BaseService",
     "DashboardData",
     "DashboardService",
+    "DriverConflictError",
     "DriverNotFoundError",
     "DriverService",
     "DriverSummary",
@@ -38,6 +49,7 @@ __all__ = [
     "ReportRequest",
     "ReportService",
     "TimelineEntry",
+    "VehicleConflictError",
     "VehicleNotFoundError",
     "VehicleService",
     "VehicleSummary",

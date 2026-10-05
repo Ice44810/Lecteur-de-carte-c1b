@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 
 from app.database.models import FileType, ParsingStatus, TachographFile
-from app.database.repositories.base import BaseRepository
+from app.database.repositories.base import LIKE_ESCAPE, BaseRepository, like_pattern
 
 __all__ = ["ImportRepository"]
 
@@ -24,6 +24,13 @@ class ImportRepository(BaseRepository[TachographFile]):
     def get_by_sha256(self, sha256: str) -> TachographFile | None:
         """Retourne le fichier portant cette empreinte, ou ``None``."""
         statement = select(TachographFile).where(TachographFile.sha256 == sha256.lower())
+        return self._session.scalars(statement).first()
+
+    def get_by_content_sha256(self, content_sha256: str) -> TachographFile | None:
+        """Retourne le fichier dont le contenu (hors signatures) a cette empreinte."""
+        statement = select(TachographFile).where(
+            TachographFile.content_sha256 == content_sha256.lower()
+        )
         return self._session.scalars(statement).first()
 
     def exists_sha256(self, sha256: str) -> bool:
@@ -68,14 +75,24 @@ class ImportRepository(BaseRepository[TachographFile]):
         if driver_id is not None:
             statement = statement.where(TachographFile.driver_id == driver_id)
         if search:
-            pattern = f"%{search.strip()}%"
+            pattern = like_pattern(search)
             statement = statement.where(
-                TachographFile.filename.ilike(pattern) | TachographFile.sha256.ilike(pattern)
+                TachographFile.filename.ilike(pattern, escape=LIKE_ESCAPE)
+                | TachographFile.sha256.ilike(pattern, escape=LIKE_ESCAPE)
             )
         statement = statement.order_by(TachographFile.imported_at.desc(), TachographFile.id.desc())
         if limit is not None:
             statement = statement.limit(limit)
         return list(self._session.scalars(statement).all())
+
+    def count_for_driver(self, driver_id: int) -> int:
+        """Retourne le nombre de fichiers rattaches a un conducteur."""
+        statement = (
+            select(func.count())
+            .select_from(TachographFile)
+            .where(TachographFile.driver_id == driver_id)
+        )
+        return int(self._session.scalar(statement) or 0)
 
     def count_by_type(self, file_type: FileType) -> int:
         """Retourne le nombre de fichiers importes pour un type donne."""

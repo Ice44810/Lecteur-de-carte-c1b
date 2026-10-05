@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from PySide6.QtWidgets import (
     QFormLayout,
@@ -89,11 +89,15 @@ class DriversPage(Page):
         self._country = QLineEdit()
         self._country.setMaxLength(3)
         self._country.setPlaceholderText("FR")
+        self._expiry = QLineEdit()
+        self._expiry.setMaxLength(10)
+        self._expiry.setPlaceholderText("JJ/MM/AAAA (facultatif)")
 
         form.addRow("Numero de carte *", self._card_number)
         form.addRow("Nom", self._last_name)
         form.addRow("Prenom", self._first_name)
         form.addRow("Pays emetteur", self._country)
+        form.addRow("Expiration de la carte", self._expiry)
         outer.addLayout(form)
 
         actions = QHBoxLayout()
@@ -116,7 +120,12 @@ class DriversPage(Page):
                     driver.last_name or "-",
                     driver.first_name or "-",
                     driver.card_issuing_country or "-",
-                    driver.card_expiry_status(today),
+                    (
+                        f"{driver.card_expiry_date.strftime('%d/%m/%Y')} "
+                        f"({driver.card_expiry_status(today)})"
+                        if driver.card_expiry_date
+                        else driver.card_expiry_status(today)
+                    ),
                     str(driver.files_count),
                     str(driver.activities_count),
                     driver.last_activity_end.strftime("%d/%m/%Y")
@@ -138,12 +147,26 @@ class DriversPage(Page):
                 title="Champ manquant",
             )
             return
+        expiry_text = self._expiry.text().strip()
+        expiry: date | None = None
+        if expiry_text:
+            try:
+                expiry = datetime.strptime(expiry_text, "%d/%m/%Y").date()
+            except ValueError:
+                show_information(
+                    self,
+                    "La date d'expiration doit etre saisie au format JJ/MM/AAAA, "
+                    "par exemple 31/12/2030.",
+                    title="Date invalide",
+                )
+                return
         try:
             summary = self._service.create(
                 card_number=card_number,
                 first_name=self._first_name.text().strip() or None,
                 last_name=self._last_name.text().strip() or None,
                 card_issuing_country=self._country.text().strip().upper() or None,
+                card_expiry_date=expiry,
             )
         except Exception as exc:  # noqa: BLE001 - garde-fou d'interface
             show_error(self, exc, title="Creation du conducteur")
@@ -153,5 +176,6 @@ class DriversPage(Page):
         self._first_name.clear()
         self._last_name.clear()
         self._country.clear()
-        self.notify(f"Conducteur enregistre : {summary.display_name}")
+        self._expiry.clear()
+        self.notify(f"Fiche conducteur enregistree : {summary.display_name}")
         self.safe_refresh()

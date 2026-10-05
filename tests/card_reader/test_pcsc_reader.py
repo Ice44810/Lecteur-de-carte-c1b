@@ -463,3 +463,41 @@ def test_l_etat_reflete_la_connexion_active(monkeypatch: pytest.MonkeyPatch) -> 
     lecteur.connect()
 
     assert lecteur.poll().status is CardStatus.CARD_CONNECTED
+
+
+# --------------------------------------------------------------------------- #
+# Lecteur retire pendant l'interrogation
+# --------------------------------------------------------------------------- #
+def test_un_lecteur_retire_pendant_l_interrogation_ne_fait_pas_planter_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``poll`` est appele par un minuteur : il ne doit jamais lever d'exception."""
+    lecteur = FauxLecteur("Lecteur USB 00 00")
+    appels = {"nombre": 0}
+
+    def readers() -> list[Any]:
+        appels["nombre"] += 1
+        # Le lecteur disparait juste avant la lecture de l'ATR.
+        return [lecteur] if appels["nombre"] <= 3 else []
+
+    module_system = types.ModuleType("smartcard.System")
+    module_system.readers = readers  # type: ignore[attr-defined]
+    module_racine = types.ModuleType("smartcard")
+    module_racine.System = module_system  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "smartcard", module_racine)
+    monkeypatch.setitem(sys.modules, "smartcard.System", module_system)
+
+    etat = PCSCReader().poll()
+
+    assert etat.status is CardStatus.NO_READER
+
+
+def test_un_lecteur_configure_absent_est_nomme_dans_le_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installer_pyscard(monkeypatch, [FauxLecteur("Autre lecteur")])
+
+    etat = PCSCReader(reader_name="Lecteur attendu").poll()
+
+    assert etat.status is CardStatus.NO_READER
+    assert "Lecteur attendu" in (etat.detail or "")

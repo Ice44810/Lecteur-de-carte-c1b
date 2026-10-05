@@ -134,3 +134,22 @@ def test_un_demarrage_impossible_est_explique_sur_la_sortie_d_erreur(
     assert "Cause  :" in erreur
     assert "Action :" in erreur
     assert "Traceback" not in erreur
+
+
+def test_le_mode_verification_n_ouvre_jamais_de_boite_de_dialogue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Un diagnostic automatise ne doit pas rester bloque sur une fenetre modale."""
+    message_box = pytest.importorskip("PySide6.QtWidgets").QMessageBox
+
+    def interdit(self: object) -> int:
+        raise AssertionError("aucune boite de dialogue ne doit s'ouvrir en mode --check")
+
+    monkeypatch.setattr(message_box, "exec", interdit, raising=False)
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setenv("QT_QPA_PLATFORM", "xcb")
+    obstacle = tmp_path / "obstacle"
+    obstacle.write_text("fichier", encoding="utf-8")
+
+    assert main(["--check", "--data-dir", str(obstacle / "donnees")]) == EXIT_STARTUP_FAILURE
+    assert "Action :" in capsys.readouterr().err

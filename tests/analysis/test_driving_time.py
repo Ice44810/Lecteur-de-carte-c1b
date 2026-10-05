@@ -140,9 +140,10 @@ def test_le_meme_jeu_donne_des_blocs_differents_selon_le_seuil(
     assert len(continuous_driving_blocks(intervals, break_minimum_seconds=60 * 60)) == 1
 
 
-def test_un_trou_sans_enregistrement_compte_comme_interruption(
+def test_un_trou_sans_enregistrement_ne_vaut_pas_coupure(
     interval_factory: Factory,
 ) -> None:
+    """Une absence de donnee n'est jamais assimilee a du repos."""
     intervals = (
         interval_factory(ActivityType.DRIVING, 8, 10),
         interval_factory(ActivityType.DRIVING, 12, 14),
@@ -150,7 +151,48 @@ def test_un_trou_sans_enregistrement_compte_comme_interruption(
 
     blocs = continuous_driving_blocks(intervals, break_minimum_seconds=45 * 60)
 
-    assert len(blocs) == 2
+    assert len(blocs) == 1
+    assert blocs[0].driving_seconds == 4 * 3600
+
+
+def test_le_travail_et_la_disponibilite_ne_valent_pas_coupure(
+    interval_factory: Factory,
+) -> None:
+    """Reglement (CE) no 561/2006, article 4, point d) : une pause exclut toute tache."""
+    intervals = (
+        interval_factory(ActivityType.DRIVING, 8, 10),
+        interval_factory(ActivityType.WORK, 10, 11),
+        interval_factory(ActivityType.AVAILABILITY, 11, 12),
+        interval_factory(ActivityType.DRIVING, 12, 14),
+    )
+
+    assert len(continuous_driving_blocks(intervals, break_minimum_seconds=45 * 60)) == 1
+
+
+def test_un_repos_interrompu_n_est_pas_cumule(interval_factory: Factory) -> None:
+    """Deux repos de 30 minutes separes par du travail ne font pas une coupure de 60."""
+    intervals = (
+        interval_factory(ActivityType.DRIVING, 8, 10),
+        interval_factory(ActivityType.REST, 10, 10.5),
+        interval_factory(ActivityType.WORK, 10.5, 10.75),
+        interval_factory(ActivityType.REST, 10.75, 11.25),
+        interval_factory(ActivityType.DRIVING, 11.25, 13),
+    )
+
+    assert len(continuous_driving_blocks(intervals, break_minimum_seconds=45 * 60)) == 1
+
+
+def test_un_repos_enregistre_en_plusieurs_segments_reste_continu(
+    interval_factory: Factory,
+) -> None:
+    intervals = (
+        interval_factory(ActivityType.DRIVING, 8, 10),
+        interval_factory(ActivityType.REST, 10, 10.5),
+        interval_factory(ActivityType.REST, 10.5, 10.75),
+        interval_factory(ActivityType.DRIVING, 10.75, 12),
+    )
+
+    assert len(continuous_driving_blocks(intervals, break_minimum_seconds=45 * 60)) == 2
 
 
 def test_seuil_negatif_refuse(journee_type: tuple[ActivityInterval, ...]) -> None:

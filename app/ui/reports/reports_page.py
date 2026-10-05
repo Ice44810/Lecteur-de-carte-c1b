@@ -8,8 +8,6 @@ document incomplet.
 
 from __future__ import annotations
 
-from datetime import timedelta
-
 from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
     QComboBox,
@@ -24,10 +22,10 @@ from PySide6.QtWidgets import (
 )
 
 from app.bootstrap import ApplicationContext
-from app.core.timeutils import utcnow
+from app.services.card_report_service import CardReportService
 from app.services.driver_service import DriverService
 from app.services.report_service import ReportFormat, ReportRequest, ReportService
-from app.ui.common.errors import show_error
+from app.ui.common.errors import show_error, show_information
 from app.ui.common.page import Page
 from app.ui.common.widgets import NoticeBanner
 
@@ -43,16 +41,17 @@ class ReportsPage(Page):
     def __init__(self, context: ApplicationContext, parent: QWidget | None = None) -> None:
         self._drivers = DriverService(context.database)
         self._service = ReportService(context.database, settings=context.settings)
+        self._periods = CardReportService(context.database, settings=context.settings)
         super().__init__(context, parent)
 
     def build(self) -> None:
         """Construit le formulaire de demande de rapport."""
         self.content_layout.addWidget(
             NoticeBanner(
-                "Phase 9 : la generation des rapports PDF, Excel et CSV n'est pas encore "
-                "disponible. Le contrat de service, le contenu attendu et le nommage des "
-                "fichiers exportes sont deja definis.",
-                level="warning",
+                "Rapport conducteur : informations de la carte, evenements, periodes de "
+                "travail, activites, vehicules et pays (Excel : une feuille par rubrique ; "
+                "CSV : les activites). Rapport entreprise : une ligne de synthese par "
+                "conducteur. Les heures sont exprimees dans le fuseau d'affichage."
             )
         )
 
@@ -118,43 +117,46 @@ class ReportsPage(Page):
 
     def _build_request(self) -> ReportRequest:
         """Construit la demande de rapport depuis le formulaire."""
-        start = self._start.date().toPython()
-        end = self._end.date().toPython()
+        start, end = self._periods.local_day_bounds(
+            self._start.date().toPython(), self._end.date().toPython()
+        )
         driver_id = self._scope.currentData()
-        reference = utcnow()
         return ReportRequest(
             report_format=self._format.currentData(),
-            period_start=reference.replace(
-                year=start.year,
-                month=start.month,
-                day=start.day,
-                hour=0,
-                minute=0,
-                second=0,
-                microsecond=0,
-            ),
-            period_end=reference.replace(
-                year=end.year,
-                month=end.month,
-                day=end.day,
-                hour=0,
-                minute=0,
-                second=0,
-                microsecond=0,
-            )
-            + timedelta(days=1),
+            period_start=start,
+            period_end=end,
             driver_ids=(driver_id,) if driver_id is not None else (),
         )
 
+    def _period_is_valid(self) -> bool:
+        """Verifie que la periode saisie n'est pas inversee, et le signale sinon."""
+        if self._start.date() <= self._end.date():
+            return True
+        show_information(
+            self,
+            "La date de debut de periode est posterieure a la date de fin. "
+            "Corrigez la periode avant de continuer.",
+            title="Periode invalide",
+        )
+        return False
+
     def _on_preview(self) -> None:
         """Affiche le chemin de sortie propose."""
+        if not self._period_is_valid():
+            return
         path = self._service.suggest_output_path(self._build_request())
         self._output.setText(str(path))
         self.notify(f"Fichier propose : {path.name}")
 
     def _on_generate(self) -> None:
         """Tente de generer le rapport ; l'indisponibilite est expliquee clairement."""
+        if not self._period_is_valid():
+            return
         try:
-            self._service.generate(self._build_request())
+            path = self._service.generate(self._build_request())
         except Exception as exc:  # noqa: BLE001 - garde-fou d'interface
             show_error(self, exc, title="Generation du rapport")
+            return
+        self._output.setText(str(path))
+        self.notify(f"Rapport enregistre : {path.name}")
+        show_information(self, f"Rapport enregistre :\n{path}", title="Generation du rapport")

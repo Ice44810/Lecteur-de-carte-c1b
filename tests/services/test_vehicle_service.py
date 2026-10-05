@@ -8,7 +8,12 @@ import pytest
 
 from app.core.enums import ActivityType
 from app.database.database import Database
-from app.services.vehicle_service import VehicleNotFoundError, VehicleService, VehicleSummary
+from app.services.vehicle_service import (
+    VehicleConflictError,
+    VehicleNotFoundError,
+    VehicleService,
+    VehicleSummary,
+)
 
 
 @pytest.fixture
@@ -113,3 +118,30 @@ def test_le_service_ne_retourne_jamais_d_objet_orm(service: VehicleService, vehi
 
     assert isinstance(fiche, VehicleSummary)
     assert not hasattr(fiche, "_sa_instance_state")
+
+
+def test_un_vin_deja_attribue_a_un_autre_vehicule_est_refuse(service: VehicleService) -> None:
+    service.create(registration="AA-111-AA", vin="VF1234567890ABCDE")
+
+    with pytest.raises(VehicleConflictError) as erreur:
+        service.create(registration="BB-222-BB", vin="vf1234567890abcde")
+
+    assert "AA-111-AA" in erreur.value.cause
+    assert service.count() == 1
+
+
+def test_une_saisie_contradictoire_ne_modifie_pas_la_fiche(service: VehicleService) -> None:
+    service.create(registration="AA-111-AA", registration_country="F")
+
+    with pytest.raises(VehicleConflictError):
+        service.create(registration="AA-111-AA", registration_country="D")
+
+    assert service.list_vehicles()[0].registration_country == "F"
+
+
+def test_une_seconde_saisie_complete_les_champs_vides(service: VehicleService) -> None:
+    service.create(registration="AA-111-AA")
+
+    fiche = service.create(registration="AA-111-AA", vin="vf1234567890abcde")
+
+    assert fiche.vin == "VF1234567890ABCDE"

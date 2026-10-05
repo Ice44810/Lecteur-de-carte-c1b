@@ -103,7 +103,7 @@ def test_select_file_utilise_la_forme_normalisee() -> None:
     assert (commande.cla, commande.ins, commande.p1, commande.p2) == (
         CLA_ISO,
         INS_SELECT,
-        0x00,
+        0x02,
         0x0C,
     )
     assert commande.data == b"\x3f\x00"

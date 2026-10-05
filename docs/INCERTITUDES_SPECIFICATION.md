@@ -19,9 +19,16 @@ Le choix retenu est donc explicite : **tant qu'une structure n'est pas confirmé
 le code refuse de décoder** en levant `UnconfirmedStructureError`, dont le message
 cite les points à établir.
 
-Ce refus est vérifié par des tests : `parse()` sur un fichier C1B ou V1B lève
-l'erreur, `TachographCard.download()` également, et — point important — **aucune
-commande n'est transmise à la carte** lors d'un refus.
+Ce refus est vérifié par des tests : les méthodes d'extraction des parsers C1B et
+V1B lèvent l'erreur, et — point important — si un point de spécification de la
+carte repasse à l'état « À confirmer », **aucune commande n'est transmise à la
+carte**.
+
+Les quatre points du domaine `card` sont à l'état « En cours de validation » :
+chacun cite l'exigence du règlement (UE) 2016/799 (version consolidée,
+document 02016R0799-20230821) qui fixe la commande ou l'identifiant utilisé. Ils
+passeront à « Confirmé » lorsqu'un téléchargement réel aura été vérifié avec un
+outil tiers et versé dans `tests/fixtures/`.
 
 ## 2. Sources à consulter
 
@@ -140,12 +147,13 @@ tranchée explicitement.
 
 | Appel | Comportement |
 | --- | --- |
-| `C1BParser().parse(chemin)` | Lève `UnconfirmedStructureError` citant les points ouverts |
-| `V1BParser().parse(chemin)` | Idem |
-| `TachographCard.select_application()` | Lève `UnconfirmedStructureError` (`CARD_APPLICATION_SELECTION`) |
-| `TachographCard.read_elementary_file(...)` | Lève `UnconfirmedStructureError` (`CARD_FILE_IDENTIFIERS`) |
-| `TachographCard.download()` | Lève `UnconfirmedStructureError` (`CARD_DOWNLOAD_FILE_ASSEMBLY`) |
-| `ImportService.import_file(...)` | Lève `NotImplementedError` mentionnant la phase 3 |
+| `C1BParser.extract_*()` | Lève `UnconfirmedStructureError` citant le point ouvert |
+| `C1BParser.parse()` | Retourne un résultat partiel ; un diagnostic `STRUCTURE_NOT_CONFIRMED` par section non lue |
+| `V1BParser.extract_*()` / `parse()` | Idem |
+| `TachographCard.select_application()` | SELECT par AID (TCS_37) |
+| `TachographCard.read_elementary_file(...)` | SELECT EF (TCS_39) puis READ BINARY (TCS_42-43) |
+| `TachographCard.download()` | Séquence DDP_035 à DDP_038, fichier assemblé selon DDP_041 à DDP_046, en lecture seule |
+| `ImportService.import_file(...)` | Archive le fichier ; l'état « Non pris en charge » cite les points ouverts |
 
 Chacun de ces refus porte un message, une cause et une action destinés à
 l'utilisateur, et mentionne que la fonction nécessite la spécification officielle.

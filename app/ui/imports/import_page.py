@@ -1,9 +1,9 @@
 """Import de fichiers tachygraphiques C1B et V1B.
 
-Cette page met en oeuvre les etapes du flux d'import qui sont disponibles en phase 1,
-c'est-a-dire celles qui **n'ecrivent rien** : validation de l'extension, calcul de
-l'empreinte SHA-256 et detection de doublon. L'etape d'archivage et d'enregistrement
-est annoncee clairement comme prevue en phase 3, plutot que simulee.
+Deux temps : l'examen du fichier, qui **n'ecrit rien** (validation de l'extension,
+calcul de l'empreinte SHA-256, detection de doublon), puis, a la demande de
+l'utilisateur, l'archivage d'une copie immuable et l'enregistrement dans le journal.
+Le decodage du contenu binaire n'est pas simule : son indisponibilite est affichee.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 from app.bootstrap import ApplicationContext
 from app.core.enums import FileType
 from app.services.import_service import FileInspection, ImportService
-from app.ui.common.errors import show_error
+from app.ui.common.errors import show_error, show_information
 from app.ui.common.page import Page
 from app.ui.common.widgets import NoticeBanner
 
@@ -41,7 +41,7 @@ class ImportPage(Page):
     )
 
     def __init__(self, context: ApplicationContext, parent: QWidget | None = None) -> None:
-        self._service = ImportService(context.database)
+        self._service = ImportService(context.database, settings=context.settings)
         self._inspection: FileInspection | None = None
         super().__init__(context, parent)
 
@@ -49,11 +49,12 @@ class ImportPage(Page):
         """Construit la zone de selection et le compte rendu d'examen."""
         self.content_layout.addWidget(
             NoticeBanner(
-                "Phase 1 : la selection, la validation, le calcul de l'empreinte SHA-256 "
-                "et la detection des doublons sont operationnels. L'archivage du fichier "
-                "et son enregistrement en base sont prevus en phase 3 ; le decodage du "
-                "contenu binaire en phase 4, apres confirmation des structures avec la "
-                "specification officielle.",
+                "La selection, la validation, le calcul de l'empreinte SHA-256, la "
+                "detection des doublons et l'archivage du fichier original sont "
+                "operationnels. Le decodage du contenu binaire (conducteur, activites) "
+                "n'est pas encore disponible : il attend la confirmation des structures "
+                "avec la specification officielle, et pourra etre rejoue sur les fichiers "
+                "deja archives.",
                 level="warning",
             )
         )
@@ -167,10 +168,23 @@ class ImportPage(Page):
             label.setText("-")
 
     def _on_import(self) -> None:
-        """Declenche l'import ; la phase 3 n'etant pas livree, l'erreur est explicite."""
+        """Archive le fichier examine et l'enregistre dans le journal."""
         if self._inspection is None:
             return
         try:
-            self._service.import_file(self._inspection.path)
+            record = self._service.import_file(self._inspection.path)
         except Exception as exc:  # noqa: BLE001 - garde-fou d'interface
             show_error(self, exc, title="Import du fichier")
+            return
+
+        self._import_button.setEnabled(False)
+        self._duplicate_value.setText("Fichier importe et archive")
+        lines = [
+            f"Le fichier {record.filename} a ete archive et enregistre (import #{record.id}).",
+            f"Copie archivee : {record.original_path}",
+            f"Etat du decodage : {record.parsing_status.label}",
+        ]
+        if record.parsing_error:
+            lines.append(record.parsing_error)
+        show_information(self, "\n\n".join(lines), title="Import du fichier")
+        self.notify(f"Fichier importe : {record.filename} ({record.parsing_status.label})")

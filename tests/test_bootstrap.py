@@ -7,12 +7,16 @@ exploitable. Un echec doit etre explicite et ne jamais laisser la base a moitie 
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 
+from app.analysis.rules import RULESET_FILENAME
 from app.bootstrap import ApplicationContext, bootstrap
 from app.config.settings import Settings
+from app.core.exceptions import MigrationError
 from app.database.database import Database
 from app.database.migrations import build_runner
 
@@ -97,3 +101,60 @@ def test_le_contexte_est_immuable(settings: Settings, database: Database) -> Non
 
     with pytest.raises(AttributeError):
         contexte.schema_version = 99  # type: ignore[misc]
+
+
+def test_le_jeu_de_seuils_est_charge_au_demarrage(settings: Settings, database: Database) -> None:
+    """Toutes les analyses de la session appliquent le fichier rules.json."""
+    settings.ensure_directories()
+    (settings.data_dir / RULESET_FILENAME).write_text(
+        json.dumps(
+            {
+                "version": "2026.1",
+                "parameters": {
+                    "WEEKLY_DRIVING_MAX_SECONDS": {
+                        "code": "WEEKLY_DRIVING_MAX_SECONDS",
+                        "label": "Conduite hebdomadaire maximale",
+                        "value": 1,
+                        "source": "Seuil fictif de test, sans valeur reglementaire",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    contexte = bootstrap(settings, database=database)
+
+    assert contexte.ruleset.version == "2026.1"
+    assert contexte.ruleset_error is None
+
+
+def test_un_jeu_de_seuils_invalide_ne_bloque_pas_le_demarrage(
+    settings: Settings, database: Database
+) -> None:
+    settings.ensure_directories()
+    (settings.data_dir / RULESET_FILENAME).write_text("{ pas du json", encoding="utf-8")
+
+    contexte = bootstrap(settings, database=database)
+
+    assert contexte.ruleset.is_empty
+    assert contexte.ruleset_error is not None
+    assert contexte.ruleset_error.action
+
+
+def test_une_base_issue_d_une_version_plus_recente_est_refusee(
+    settings: Settings, database: Database
+) -> None:
+    bootstrap(settings, database=database)
+    with database.engine.begin() as connexion:
+        connexion.execute(
+            text(
+                "INSERT INTO schema_migrations (version, name, applied_at) "
+                "VALUES (999, 'future', '2030-01-01')"
+            )
+        )
+
+    with pytest.raises(MigrationError) as erreur:
+        bootstrap(settings, database=database)
+
+    assert "plus recente" in erreur.value.message
