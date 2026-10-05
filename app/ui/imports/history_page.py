@@ -7,6 +7,9 @@ d'archivage et l'affichage du detail sont disponibles.
 
 from __future__ import annotations
 
+from enum import StrEnum
+from typing import TypeVar
+
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
@@ -29,6 +32,13 @@ from app.ui.common.widgets import ReadOnlyTable
 __all__ = ["ImportHistoryPage"]
 
 _ALL = "Tous"
+
+_E = TypeVar("_E", bound=StrEnum)
+
+
+def _enum(kind: type[_E], value: object) -> _E | None:
+    """Reconvertit la valeur d'une liste deroulante en enumeration (``None`` : tous)."""
+    return None if value is None else kind(str(value))
 
 
 class ImportHistoryPage(Page):
@@ -108,8 +118,9 @@ class ImportHistoryPage(Page):
     def refresh(self) -> None:
         """Recharge le journal en appliquant les filtres."""
         self._records = self._service.history(
-            file_type=self._type_filter.currentData(),
-            parsing_status=self._status_filter.currentData(),
+            # Qt restitue une valeur d'enumeration sous forme de texte.
+            file_type=_enum(FileType, self._type_filter.currentData()),
+            parsing_status=_enum(ParsingStatus, self._status_filter.currentData()),
             search=self._search.text() or None,
         )
         self._table.set_rows(

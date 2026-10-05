@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QVBoxLayout,
@@ -69,9 +70,11 @@ class DriversPage(Page):
                 "Fichiers",
                 "Activites",
                 "Derniere activite",
+                "Flotte",
             )
         )
         self.content_layout.addWidget(self._table)
+        self.content_layout.addLayout(self._build_fleet_actions())
 
         self.content_layout.addWidget(self._build_creation_form())
 
@@ -131,11 +134,49 @@ class DriversPage(Page):
                     driver.last_activity_end.strftime("%d/%m/%Y")
                     if driver.last_activity_end
                     else "-",
+                    "Oui" if driver.in_fleet else "A confirmer",
                 )
                 for driver in drivers
-            )
+            ),
+            keys=tuple(driver.id for driver in drivers),
         )
         self.notify(f"{len(drivers)} conducteur(s) affiche(s)")
+
+    def _build_fleet_actions(self) -> QHBoxLayout:
+        """Boutons de confirmation de l'appartenance a la flotte."""
+        actions = QHBoxLayout()
+        hint = QLabel(
+            "« A confirmer » : fiche creee automatiquement par l'import d'une carte. "
+            "Confirmez les conducteurs de votre flotte ; les autres apparaissent dans "
+            "Statistiques > Conducteurs inconnus."
+        )
+        hint.setObjectName("PageSubtitle")
+        hint.setWordWrap(True)
+        actions.addWidget(hint, stretch=1)
+        confirm_button = QPushButton("Confirmer dans la flotte")
+        confirm_button.clicked.connect(lambda: self._set_in_fleet(True))
+        actions.addWidget(confirm_button)
+        remove_button = QPushButton("Retirer de la flotte")
+        remove_button.clicked.connect(lambda: self._set_in_fleet(False))
+        actions.addWidget(remove_button)
+        return actions
+
+    def _set_in_fleet(self, in_fleet: bool) -> None:
+        """Change l'appartenance a la flotte de la fiche selectionnee."""
+        identifier = self._table.selected_key()
+        if not isinstance(identifier, int):
+            show_information(self, "Selectionnez d'abord une ligne du tableau.", title="Flotte")
+            return
+        try:
+            summary = self._service.set_in_fleet(identifier, in_fleet)
+        except Exception as exc:  # noqa: BLE001 - garde-fou d'interface
+            show_error(self, exc, title="Flotte")
+            return
+        self.notify(
+            f"{summary.display_name} : "
+            + ("confirme dans la flotte" if in_fleet else "retire de la flotte")
+        )
+        self.safe_refresh()
 
     def _on_create(self) -> None:
         """Cree une fiche conducteur depuis le formulaire."""

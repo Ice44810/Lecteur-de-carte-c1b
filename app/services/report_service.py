@@ -85,7 +85,15 @@ class ReportRequest:
     output_path: Path | None = None
 
     def __post_init__(self) -> None:
-        """Refuse une periode vide ou inversee."""
+        """Normalise le format et refuse une periode vide ou inversee.
+
+        Le format peut arriver sous forme de texte (``"PDF"``) : c'est ce que restitue
+        une liste deroulante Qt a laquelle on a confie une valeur d'enumeration.
+
+        Raises:
+            ValueError: Format inconnu, ou periode vide ou inversee.
+        """
+        object.__setattr__(self, "report_format", ReportFormat(self.report_format))
         if self.period_end <= self.period_start:
             raise ValueError("la fin de la periode du rapport doit suivre son debut")
 

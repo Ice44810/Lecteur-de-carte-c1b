@@ -9,7 +9,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from app.reports.tables import ReportTable
+from app.reports.model import ReportTable
 
 __all__ = ["write_csv"]
 

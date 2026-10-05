@@ -25,7 +25,7 @@ def test_upgrade_cree_toutes_les_tables_attendues(database: Database) -> None:
 
     applied = runner.upgrade()
 
-    assert [migration.version for migration in applied] == [1, 2]
+    assert [migration.version for migration in applied] == [1, 2, 3]
     tables = set(inspect(database.engine).get_table_names())
     assert set(EXPECTED_TABLES) <= tables
     assert SCHEMA_MIGRATIONS_TABLE in tables
@@ -136,3 +136,38 @@ def test_la_migration_0002_complete_une_base_en_version_1(database: Database) ->
     assert {"card_inserted", "manual_entry", "crew"} <= colonnes
     colonnes = {item["name"] for item in inspect(database.engine).get_columns("tachograph_files")}
     assert "content_sha256" in colonnes
+
+
+def test_la_migration_0003_confirme_les_fiches_saisies(database: Database) -> None:
+    """Une fiche sans import est saisie ; une fiche alimentee par un import est a confirmer."""
+    from sqlalchemy import text
+
+    from app.database.migrations import m0001, m0002, m0003
+    from app.database.migrations.runner import MigrationRunner
+
+    MigrationRunner(database.engine, (m0001, m0002)).upgrade()
+    with database.engine.begin() as connexion:
+        connexion.execute(text("ALTER TABLE drivers DROP COLUMN in_fleet"))
+        connexion.execute(text("ALTER TABLE vehicles DROP COLUMN in_fleet"))
+        for numero in ("SAISIE", "IMPORTEE"):
+            connexion.execute(
+                text(
+                    "INSERT INTO drivers (card_number, created_at, updated_at) "
+                    "VALUES (:numero, '2026-01-01', '2026-01-01')"
+                ),
+                {"numero": numero},
+            )
+        connexion.execute(
+            text(
+                "INSERT INTO tachograph_files (filename, file_type, sha256, original_path, "
+                "file_size, parsing_status, driver_id, imported_at) VALUES ('a.C1B', 'C1B', "
+                ":sha, '/tmp/a', 1, 'SUCCESS', 2, '2026-01-01')"
+            ),
+            {"sha": "a" * 64},
+        )
+
+    MigrationRunner(database.engine, (m0001, m0002, m0003)).upgrade()
+
+    with database.engine.connect() as connexion:
+        lignes = dict(connexion.execute(text("SELECT card_number, in_fleet FROM drivers")).all())
+    assert lignes == {"SAISIE": 1, "IMPORTEE": None}

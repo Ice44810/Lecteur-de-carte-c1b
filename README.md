@@ -132,6 +132,23 @@ travail journalières (avec l'interruption qui suit chacune et sa part dans les
 24 heures), activités, véhicules et pays, en heure locale. Ce sont des mesures,
 sans appréciation de conformité.
 
+**Statistiques et contrôles de flotte.** Sur une période choisie :
+
+- activité cumulée par conducteur (détail journalier facultatif, en heures-minutes
+  ou en heures-centièmes) ;
+- distance cumulée par conducteur et par véhicule ;
+- exports Excel : synthèse, export détaillé, export des anomalies ;
+- excès de vitesse enregistrés sur les cartes ;
+- conduites sans carte au-delà d'un nombre de kilomètres choisi, et continuité des
+  véhicules : un véhicule dont le compteur a avancé entre deux utilisations connues
+  a roulé sans qu'aucune carte importée ne l'enregistre ;
+- continuité des conducteurs : périodes sans aucun enregistrement ;
+- délais de téléchargement : 28 jours pour les cartes, 90 jours pour les unités
+  embarquées (règlement (UE) n° 581/2010, article 1er) ;
+- conducteurs et véhicules inconnus : apparus à l'import d'une carte et non confirmés
+  dans la flotte. Une fiche saisie manuellement est confirmée d'office ; les autres
+  se confirment depuis les pages Conducteurs et Véhicules.
+
 **Calcul des temps.** À partir d'activités enregistrées en base, l'application
 reconstitue une chronologie par journée et par semaine, cumule les durées par
 type d'activité (conduite, travail, disponibilité, repos) et signale les
@@ -272,12 +289,12 @@ La racine de données contient `originals/` (archivage immuable), `imports/`
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                  # 821 tests
+python -m pytest                                  # 838 tests
 python -m pytest --cov=app --cov-report=term-missing
 ruff check app tests && ruff format --check app tests
 ```
 
-821 tests couvrent 96 % des instructions de `app` (hors interface et point
+838 tests couvrent 96 % des instructions de `app` (hors interface et point
 d'entrée, testés séparément). Les tests d'interface s'exécutent sans écran grâce
 à `QT_QPA_PLATFORM=offscreen`, positionné automatiquement, et les tests PC/SC
 n'exigent aucun matériel : la bibliothèque `pyscard` y est remplacée par un
@@ -286,13 +303,13 @@ carte en cours de lecture.
 
 | Domaine | Tests |
 | --- | --- |
-| `tests/services` | 159 |
+| `tests/services` | 172 |
 | `tests/analysis` | 133 |
 | `tests/card_reader` | 141 |
 | `tests/parser` | 114 |
 | `tests/core` | 80 |
-| `tests/database` | 81 |
-| `tests/ui` | 70 |
+| `tests/database` | 82 |
+| `tests/ui` | 73 |
 | `tests/config` | 19 |
 | Démarrage (`bootstrap`, `main`) | 24 |
 

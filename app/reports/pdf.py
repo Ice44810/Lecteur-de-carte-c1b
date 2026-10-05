@@ -11,7 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from app.reports.tables import ReportTable
+from app.reports.model import ReportTable
 
 __all__ = ["write_pdf"]
 

@@ -7,32 +7,13 @@ calculent rien ; ils mettent en forme un :class:`~app.services.card_report_servi
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from app.core.timeutils import format_duration
+from app.reports.model import ReportTable
 from app.services.card_report_service import CardReport
 
 __all__ = ["ReportTable", "card_report_tables", "summary_table"]
-
-
-@dataclass(frozen=True, slots=True)
-class ReportTable:
-    """Tableau d'une rubrique de rapport.
-
-    Attributes:
-        title: Intitule de la rubrique (et nom de la feuille Excel).
-        headers: Intitules des colonnes.
-        rows: Lignes, chacune de la longueur de ``headers``.
-        emphasized: Indices des lignes a mettre en valeur (interruptions, totaux).
-        note: Precision affichee sous le tableau.
-    """
-
-    title: str
-    headers: tuple[str, ...]
-    rows: tuple[tuple[str, ...], ...]
-    emphasized: frozenset[int] = field(default_factory=frozenset)
-    note: str = ""
 
 
 def _date(value: date | None) -> str:

@@ -197,3 +197,16 @@ def test_une_periode_inversee_est_refusee() -> None:
             period_start=datetime(2026, 9, 30, tzinfo=UTC),
             period_end=datetime(2026, 9, 1, tzinfo=UTC),
         )
+
+
+def test_un_format_transmis_sous_forme_de_texte_est_accepte(service: ReportService) -> None:
+    """Une liste deroulante Qt restitue ``"PDF"`` et non ``ReportFormat.PDF``."""
+    demande = ReportRequest(report_format="PDF", period_start=DEBUT, period_end=FIN)  # type: ignore[arg-type]
+
+    assert demande.report_format is ReportFormat.PDF
+    assert service.suggest_output_path(demande).suffix == ".pdf"
+
+
+def test_un_format_inconnu_est_refuse() -> None:
+    with pytest.raises(ValueError):
+        ReportRequest(report_format="DOCX", period_start=DEBUT, period_end=FIN)  # type: ignore[arg-type]

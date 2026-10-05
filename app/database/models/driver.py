@@ -72,6 +72,9 @@ class Driver(TimestampMixin, Base):
     )
 
     notes: Mapped[str | None] = mapped_column(String(500), doc="Commentaire libre de l'exploitant.")
+    in_fleet: Mapped[bool | None] = mapped_column(
+        doc="Appartenance confirmee a la flotte ; vide si la fiche a ete creee par un import."
+    )
 
     activities: Mapped[list[Activity]] = relationship(
         back_populates="driver",

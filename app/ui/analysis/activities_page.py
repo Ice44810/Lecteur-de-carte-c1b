@@ -117,7 +117,9 @@ class ActivitiesPage(Page):
             return
 
         period_start, period_end = self._current_period()
-        selected_type = self._type_filter.currentData()
+        # Qt restitue une valeur d'enumeration sous forme de texte.
+        selected_data = self._type_filter.currentData()
+        selected_type = ActivityType(selected_data) if selected_data is not None else None
 
         entries = self._analysis.period_timeline(
             driver_id,

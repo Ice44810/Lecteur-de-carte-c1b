@@ -331,7 +331,7 @@ def test_un_fichier_v1b_reste_non_pris_en_charge(
 # --------------------------------------------------------------------------- #
 def carte_synthetique(
     tmp_path: Path,
-    nom: str = "carte.C1B",
+    fichier: str = "carte.C1B",
     *,
     signature: bytes = b"\xaa" * 128,
     **options: object,
@@ -359,7 +359,7 @@ def carte_synthetique(
         ],
     }
     valeurs.update(options)
-    chemin = tmp_path / nom
+    chemin = tmp_path / fichier
     chemin.write_bytes(CarteSynthetique(**valeurs).fichier(signature=signature))  # type: ignore[arg-type]
     return chemin
 

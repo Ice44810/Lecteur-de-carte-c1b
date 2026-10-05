@@ -55,6 +55,8 @@ class VehicleSummary:
         vin: Numero d'identification du vehicule, si connu.
         tachograph_identifier: Identifiant de l'unite embarquee, si connu.
         activities_count: Nombre d'activites rattachees.
+        in_fleet: Appartenance confirmee a la flotte (``False`` : fiche creee par un
+            import, a confirmer).
     """
 
     id: int
@@ -63,6 +65,7 @@ class VehicleSummary:
     vin: str | None = None
     tachograph_identifier: str | None = None
     activities_count: int = 0
+    in_fleet: bool = False
 
     @property
     def display_name(self) -> str:
@@ -155,6 +158,21 @@ class VehicleService(BaseService):
                 logger.info("Vehicule cree : %s", normalized)
             else:
                 self._complete(vehicle, values)
+            # Une saisie explicite vaut confirmation de l'appartenance a la flotte.
+            vehicle.in_fleet = True
+            return self._to_summary(session, vehicle)
+
+    def set_in_fleet(self, vehicle_id: int, in_fleet: bool) -> VehicleSummary:
+        """Confirme ou retire l'appartenance d'un vehicule a la flotte.
+
+        Raises:
+            VehicleNotFoundError: Aucun vehicule ne porte cet identifiant.
+        """
+        with self._session() as session:
+            vehicle = VehicleRepository(session).get(vehicle_id)
+            if vehicle is None:
+                raise VehicleNotFoundError(technical_detail=f"vehicle_id={vehicle_id}")
+            vehicle.in_fleet = True if in_fleet else None
             return self._to_summary(session, vehicle)
 
     @staticmethod
@@ -190,4 +208,5 @@ class VehicleService(BaseService):
             vin=vehicle.vin,
             tachograph_identifier=vehicle.tachograph_identifier,
             activities_count=repository.count_for_vehicle(vehicle.id),
+            in_fleet=bool(vehicle.in_fleet),
         )

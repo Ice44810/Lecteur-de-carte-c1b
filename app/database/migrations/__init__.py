@@ -16,11 +16,12 @@ Regles :
 
 from app.database.migrations.m0001_initial_schema import migration as m0001
 from app.database.migrations.m0002_card_data import migration as m0002
+from app.database.migrations.m0003_fleet_membership import migration as m0003
 from app.database.migrations.runner import Migration, MigrationRunner
 
 __all__ = ["MIGRATIONS", "Migration", "MigrationRunner", "build_runner"]
 
-MIGRATIONS: tuple[Migration, ...] = (m0001, m0002)
+MIGRATIONS: tuple[Migration, ...] = (m0001, m0002, m0003)
 """Liste ordonnee des migrations connues de cette version du logiciel."""
 
 

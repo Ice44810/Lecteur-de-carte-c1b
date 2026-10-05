@@ -8,7 +8,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from app.reports.tables import ReportTable
+from app.reports.model import ReportTable
 
 __all__ = ["write_excel"]
 

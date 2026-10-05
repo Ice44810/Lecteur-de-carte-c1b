@@ -122,7 +122,8 @@ class ReportsPage(Page):
         )
         driver_id = self._scope.currentData()
         return ReportRequest(
-            report_format=self._format.currentData(),
+            # Qt restitue une valeur d'enumeration sous forme de texte.
+            report_format=ReportFormat(self._format.currentData()),
             period_start=start,
             period_end=end,
             driver_ids=(driver_id,) if driver_id is not None else (),

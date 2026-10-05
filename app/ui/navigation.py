@@ -91,6 +91,13 @@ def _card_data_page() -> type:
     return CardDataPage
 
 
+def _fleet_tools_page() -> type:
+    """Importe la page des statistiques et controles."""
+    from app.ui.analysis.fleet_tools_page import FleetToolsPage
+
+    return FleetToolsPage
+
+
 def _anomalies_page() -> type:
     """Importe la page des anomalies."""
     from app.ui.analysis.anomalies_page import AnomaliesPage
@@ -143,6 +150,7 @@ NAVIGATION: tuple[NavigationSection, ...] = (
         items=(
             NavigationItem("card_data", "Donnees de la carte", _card_data_page),
             NavigationItem("activities", "Activites", _activities_page),
+            NavigationItem("fleet_tools", "Statistiques", _fleet_tools_page),
             NavigationItem("anomalies", "Anomalies", _anomalies_page),
             NavigationItem("reports", "Rapports", _reports_page),
         ),

@@ -154,3 +154,63 @@ def test_un_lecteur_desactive_n_est_jamais_interroge(
 
     assert watcher.presence is None
     assert carte.commandes == []
+
+
+def test_chaque_bouton_des_statistiques_produit_un_resultat(
+    application, context: ApplicationContext, dialogs: DialogRecorder, monkeypatch, tmp_path
+) -> None:
+    from PySide6.QtCore import QDate
+    from PySide6.QtGui import QDesktopServices
+    from PySide6.QtWidgets import QPushButton
+
+    from app.services.import_service import ImportService
+    from tests.services.test_import_service import carte_synthetique
+
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: True)
+    ImportService(context.database, settings=context.settings).import_file(
+        carte_synthetique(tmp_path)
+    )
+    fenetre = MainWindow(context)
+    fenetre.navigate_to("fleet_tools")
+    page = fenetre.page("fleet_tools")
+    page._start.setDate(QDate(2025, 10, 1))
+    page._end.setDate(QDate(2025, 10, 31))
+
+    for bouton in page.findChildren(QPushButton):
+        bouton.click()
+
+    assert all(titre != "Statistiques" for titre, *_ in dialogs.shown)
+    assert sorted(path.name for path in context.settings.exports_dir.glob("flotte-*.xlsx")) == [
+        "flotte-anomalies-20251001-20251031.xlsx",
+        "flotte-detaille-20251001-20251031.xlsx",
+        "flotte-synthese-20251001-20251031.xlsx",
+        "flotte-vehicules-inconnus-20251001-20251031.xlsx",
+    ]
+
+
+@pytest.mark.parametrize("format_", ["PDF", "EXCEL", "CSV"])
+def test_la_page_rapports_produit_chaque_format(
+    application, context: ApplicationContext, dialogs: DialogRecorder, tmp_path, format_: str
+) -> None:
+    """Regression : le format choisi dans la liste deroulante arrive sous forme de texte."""
+    from PySide6.QtCore import QDate
+
+    from app.services.import_service import ImportService
+    from tests.services.test_import_service import carte_synthetique
+
+    ImportService(context.database, settings=context.settings).import_file(
+        carte_synthetique(tmp_path)
+    )
+    fenetre = MainWindow(context)
+    fenetre.navigate_to("reports")
+    page = fenetre.page("reports")
+    page._scope.setCurrentIndex(1)
+    page._format.setCurrentIndex(page._format.findData(format_))
+    page._start.setDate(QDate(2025, 10, 1))
+    page._end.setDate(QDate(2025, 10, 31))
+
+    page._on_preview()
+    page._on_generate()
+
+    assert dialogs.texts() == [f"Rapport enregistre :\n{page._output.text()}"]
+    assert page._output.text().endswith({"PDF": ".pdf", "EXCEL": ".xlsx", "CSV": ".csv"}[format_])

@@ -81,6 +81,8 @@ class DriverSummary:
         files_count: Nombre de fichiers importes rattaches au conducteur.
         activities_count: Nombre de periodes d'activite enregistrees.
         last_activity_end: Fin de la derniere activite connue.
+        in_fleet: Appartenance confirmee a la flotte (``False`` : fiche creee par un
+            import, a confirmer).
     """
 
     id: int
@@ -94,6 +96,7 @@ class DriverSummary:
     files_count: int = 0
     activities_count: int = 0
     last_activity_end: date | None = None
+    in_fleet: bool = False
 
     def card_expiry_status(self, reference: date) -> str:
         """Retourne un libelle d'etat de la carte a une date donnee.
@@ -223,8 +226,23 @@ class DriverService(BaseService):
                 logger.info("Conducteur cree (carte %s)", mask_card_number(normalized))
             else:
                 self._complete(driver, values, card_number=normalized)
+            # Une saisie explicite vaut confirmation de l'appartenance a la flotte.
+            driver.in_fleet = True
             summary = self._to_summary(session, driver)
         return summary
+
+    def set_in_fleet(self, driver_id: int, in_fleet: bool) -> DriverSummary:
+        """Confirme ou retire l'appartenance d'un conducteur a la flotte.
+
+        Raises:
+            DriverNotFoundError: Aucun conducteur ne porte cet identifiant.
+        """
+        with self._session() as session:
+            driver = DriverRepository(session).get(driver_id)
+            if driver is None:
+                raise DriverNotFoundError(technical_detail=f"driver_id={driver_id}")
+            driver.in_fleet = True if in_fleet else None
+            return self._to_summary(session, driver)
 
     # ------------------------------------------------------------------ #
     # Interne
@@ -281,4 +299,5 @@ class DriverService(BaseService):
             files_count=import_repository.count_for_driver(driver.id),
             activities_count=activity_repository.count_for_driver(driver.id),
             last_activity_end=last_end.date() if last_end is not None else None,
+            in_fleet=bool(driver.in_fleet),
         )
