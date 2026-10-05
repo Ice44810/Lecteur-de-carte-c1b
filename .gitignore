@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tests / tooling
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+
+# Application runtime data.
+# The originals/ directory holds immutable copies of imported tachograph
+# files: it must never be committed (personal data + legal evidence).
+data/imports/*
+data/originals/*
+data/exports/*
+data/database/*
+!data/**/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# Local configuration / secrets
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
